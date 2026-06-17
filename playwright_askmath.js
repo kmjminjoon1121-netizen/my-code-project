@@ -9,355 +9,78 @@ async function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
 }
 
-async function main() {
-  const browser = await chromium.launch({
-    executablePath: CHROMIUM_PATH,
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--ignore-certificate-errors', '--ignore-ssl-errors']
-  });
-
-  const context = await browser.newContext({
-    viewport: { width: 1400, height: 900 },
-    ignoreHTTPSErrors: true
-  });
-  const page = await context.newPage();
-
-  // Handle any dialogs
-  page.on('dialog', async dialog => {
-    console.log('Dialog:', dialog.type(), dialog.message());
-    await dialog.accept();
-  });
-
-  console.log('=== Step 1: Opening page ===');
-  await page.goto('https://askmath.kosac.re.kr/ai/imageAnaly/imageAnalysis.do?menuPos=6', {
-    waitUntil: 'networkidle',
-    timeout: 60000
-  });
-  await sleep(2000);
-
-  await page.screenshot({ path: path.join(SCREENSHOTS_DIR, 'initial_page.png'), fullPage: false });
-  console.log('Screenshot saved: initial_page.png');
-
-  // Log page title and any visible text
-  const title = await page.title();
-  console.log('Page title:', title);
-
-  // Check for any login form
-  const loginForm = await page.$('input[type="password"]');
-  if (loginForm) {
-    console.log('Login form detected - page may require authentication');
-  }
-
-  // Check current URL
-  console.log('Current URL:', page.url());
-
-  // Take a full page screenshot to understand layout
-  await page.screenshot({ path: path.join(SCREENSHOTS_DIR, 'initial_full.png'), fullPage: true });
-  console.log('Screenshot saved: initial_full.png');
-
-  // Look for page content
-  const bodyText = await page.evaluate(() => document.body.innerText.substring(0, 500));
-  console.log('Page text preview:', bodyText);
-
-  console.log('\n=== Step 2: Looking for template images ===');
-
-  // Look for template menu images - try various selectors
-  const possibleTemplateSelectors = [
-    'img[src*="template"]',
-    'img[src*="sample"]',
-    '.template',
-    '[class*="template"]',
-    '[class*="sample"]',
-    'ul li img',
-    '.thumb img',
-    '[class*="thumb"] img',
-    'img[onclick]',
-    '.menu-item img',
-  ];
-
-  let templateImages = [];
-  for (const sel of possibleTemplateSelectors) {
-    const imgs = await page.$$(sel);
-    if (imgs.length > 0) {
-      console.log(`Found ${imgs.length} elements with selector: ${sel}`);
-      templateImages = imgs;
-      break;
-    }
-  }
-
-  if (templateImages.length === 0) {
-    // Try to find all images on the page
-    const allImgs = await page.$$('img');
-    console.log(`Total images on page: ${allImgs.length}`);
-    for (let i = 0; i < Math.min(allImgs.length, 10); i++) {
-      const src = await allImgs[i].getAttribute('src');
-      const cls = await allImgs[i].getAttribute('class');
-      const id = await allImgs[i].getAttribute('id');
-      console.log(`  img[${i}]: src=${src}, class=${cls}, id=${id}`);
-    }
-    templateImages = allImgs;
-  }
-
-  // Try clicking first non-logo/icon image
-  let clickedTemplate = false;
-  const allImgs = await page.$$('img');
-  for (let i = 0; i < allImgs.length; i++) {
-    const src = await allImgs[i].getAttribute('src');
-    const box = await allImgs[i].boundingBox();
-    if (box && box.width > 30 && box.height > 30 && src) {
-      console.log(`Clicking image: ${src} at (${box.x}, ${box.y}) size ${box.width}x${box.height}`);
-      try {
-        await allImgs[i].click({ timeout: 5000 });
-        await sleep(2000);
-        clickedTemplate = true;
-        break;
-      } catch (e) {
-        console.log(`  Could not click: ${e.message}`);
-      }
-    }
-  }
-
-  // Also look for clickable list items or buttons that might load templates
-  if (!clickedTemplate) {
-    const clickables = await page.$$('li[onclick], [data-image], [data-src], .item, .list-item');
-    console.log(`Found ${clickables.length} clickable items`);
-    if (clickables.length > 0) {
-      await clickables[0].click();
-      await sleep(2000);
-      clickedTemplate = true;
-    }
-  }
-
-  await page.screenshot({ path: path.join(SCREENSHOTS_DIR, 'after_template_click.png') });
-  console.log('Screenshot saved: after_template_click.png');
-
-  console.log('\n=== Step 3: Looking for Matrix View button (행렬 보기) ===');
-
-  // Look for the button by text
-  const matrixBtn = await page.getByText('행렬 보기').first().catch(() => null)
-    || await page.getByText('행렬보기').first().catch(() => null)
-    || await page.$('[class*="matrix"]')
-    || await page.$('button:has-text("행렬")');
-
-  // Try multiple approaches
-  const matrixBtnLocator = page.getByText(/행렬\s*보기/);
-  const matrixCount = await matrixBtnLocator.count();
-  console.log(`Found ${matrixCount} elements matching "행렬 보기"`);
-
-  if (matrixCount > 0) {
-    await matrixBtnLocator.first().click();
-    await sleep(2000);
-    console.log('Clicked 행렬 보기 button');
-  } else {
-    // Try by partial text
-    const allButtons = await page.$$('button, a, [role="button"], .btn, input[type="button"]');
-    console.log(`Total buttons/links: ${allButtons.length}`);
-    for (let i = 0; i < allButtons.length; i++) {
-      const text = await allButtons[i].innerText().catch(() => '');
-      const val = await allButtons[i].getAttribute('value').catch(() => '');
-      if (text || val) console.log(`  btn[${i}]: "${text || val}"`);
-    }
-  }
-
-  await page.screenshot({ path: path.join(SCREENSHOTS_DIR, 'exp1_matrix_view.png') });
-  console.log('Screenshot saved: exp1_matrix_view.png');
-
-  console.log('\n=== Step 4: Using eyedropper/스포이트 tool ===');
-
-  // Look for eyedropper/스포이트 tool
-  const eyedropperLocator = page.getByText(/스포이트/);
-  const eyedropCount = await eyedropperLocator.count();
-  console.log(`Found ${eyedropCount} elements matching "스포이트"`);
-
-  // Get canvas element to sample pixels
-  const canvas = await page.$('canvas');
-  if (canvas) {
-    console.log('Found canvas element');
-    const canvasBox = await canvas.boundingBox();
-    console.log(`Canvas: ${JSON.stringify(canvasBox)}`);
-
-    // Get pixel data from canvas via JavaScript
-    const pixelData = await page.evaluate(() => {
-      const canvases = document.querySelectorAll('canvas');
-      const results = [];
-      for (const c of canvases) {
-        try {
-          const ctx = c.getContext('2d');
-          if (!ctx) continue;
-          const w = c.width;
-          const h = c.height;
-          if (w === 0 || h === 0) continue;
-          const imageData = ctx.getImageData(0, 0, w, h);
-          const data = imageData.data;
-
-          let mostRed = { x: 0, y: 0, r: 0, g: 255, b: 255, score: 999999 };
-          let mostWhite = { x: 0, y: 0, r: 0, g: 0, b: 0, score: 999999 };
-
-          for (let y = 0; y < h; y++) {
-            for (let x = 0; x < w; x++) {
-              const idx = (y * w + x) * 4;
-              const r = data[idx];
-              const g = data[idx + 1];
-              const b = data[idx + 2];
-              const a = data[idx + 3];
-
-              if (a < 128) continue; // skip transparent
-
-              // Score for "most red": high R, low G, low B
-              const redScore = (255 - r) + g + b;
-              if (redScore < mostRed.score) {
-                mostRed = { x, y, r, g, b, score: redScore };
-              }
-
-              // Score for "most white": distance from (255,255,255)
-              const whiteScore = Math.sqrt((255-r)**2 + (255-g)**2 + (255-b)**2);
-              if (whiteScore < mostWhite.score) {
-                mostWhite = { x, y, r, g, b, score: whiteScore };
-              }
-            }
-          }
-
-          results.push({
-            canvasId: c.id,
-            canvasClass: c.className,
-            width: w,
-            height: h,
-            mostRed,
-            mostWhite
-          });
-        } catch (e) {
-          results.push({ error: e.message });
-        }
-      }
-      return results;
-    });
-
-    console.log('\nPixel analysis results:');
-    for (const result of pixelData) {
-      if (result.error) {
-        console.log('Canvas error:', result.error);
-        continue;
-      }
-      console.log(`Canvas ${result.canvasId || '(no id)'} [${result.width}x${result.height}]:`);
-      console.log(`  Most RED pixel: coords=(${result.mostRed.x}, ${result.mostRed.y}), RGB=(${result.mostRed.r}, ${result.mostRed.g}, ${result.mostRed.b})`);
-      console.log(`  Most WHITE pixel: coords=(${result.mostWhite.x}, ${result.mostWhite.y}), RGB=(${result.mostWhite.r}, ${result.mostWhite.g}, ${result.mostWhite.b})`);
-    }
-  } else {
-    console.log('No canvas found - looking for image element');
-    const mainImg = await page.$('#mainImage, #canvas, .main-image, img.preview');
-    if (mainImg) {
-      console.log('Found image element');
-    }
-  }
-
-  console.log('\n=== Step 5: Channel Separation ===');
-
-  // Look for channel separation controls
-  const channelSelectors = [
-    page.getByText(/채널/),
-    page.getByText(/R채널/),
-    page.getByText(/G채널/),
-    page.getByText(/B채널/),
-    page.getByText(/분리/),
-  ];
-
-  for (const loc of channelSelectors) {
+async function tryClick(page, text) {
+  try {
+    const loc = page.getByText(text, { exact: false });
     const count = await loc.count();
     if (count > 0) {
-      const text = await loc.first().innerText().catch(() => '');
-      console.log(`Found channel element: "${text}"`);
+      await loc.first().click({ timeout: 3000 });
+      return true;
     }
-  }
+  } catch (e) {}
+  return false;
+}
 
-  // Look for tab or menu items
-  const allTabs = await page.$$('[role="tab"], .tab, .nav-tab, .nav-item');
-  console.log(`Total tabs/nav items: ${allTabs.length}`);
-  for (let i = 0; i < allTabs.length; i++) {
-    const text = await allTabs[i].innerText().catch(() => '');
-    console.log(`  tab[${i}]: "${text}"`);
-  }
+async function getCanvasPixelData(page) {
+  return page.evaluate(() => {
+    const canvases = document.querySelectorAll('canvas');
+    const results = [];
+    for (const c of canvases) {
+      try {
+        const ctx = c.getContext('2d');
+        if (!ctx) continue;
+        const w = c.width;
+        const h = c.height;
+        if (w === 0 || h === 0) continue;
+        const imageData = ctx.getImageData(0, 0, w, h);
+        const data = imageData.data;
 
-  await page.screenshot({ path: path.join(SCREENSHOTS_DIR, 'exp2_channels_before.png') });
+        let mostRed = { x: 0, y: 0, r: 0, g: 255, b: 255, score: 999999 };
+        let mostWhite = { x: 0, y: 0, r: 0, g: 0, b: 0, score: 999999 };
 
-  // Try to find and click R, G, B channel buttons
-  const rBtn = await page.getByText('R').first().catch(() => null);
-  const gBtn = await page.getByText('G').first().catch(() => null);
-  const bBtn = await page.getByText('B').first().catch(() => null);
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            const idx = (y * w + x) * 4;
+            const r = data[idx];
+            const g = data[idx + 1];
+            const b = data[idx + 2];
+            const a = data[idx + 3];
 
-  // Try channel separation - look for radio buttons or checkboxes
-  const channelBtns = await page.$$('input[type="radio"], input[type="checkbox"]');
-  console.log(`Found ${channelBtns.length} radio/checkbox inputs`);
+            if (a < 128) continue; // skip transparent pixels
 
-  await page.screenshot({ path: path.join(SCREENSHOTS_DIR, 'exp2_channels.png') });
-  console.log('Screenshot saved: exp2_channels.png');
+            // Score for "most red": high R, low G, low B
+            const redScore = (255 - r) + g + b;
+            if (redScore < mostRed.score) {
+              mostRed = { x, y, r, g, b, score: redScore };
+            }
 
-  console.log('\n=== Step 6: 변환 menu operations ===');
+            // Score for "most white": Euclidean distance from (255,255,255)
+            const whiteScore = Math.sqrt((255 - r) ** 2 + (255 - g) ** 2 + (255 - b) ** 2);
+            if (whiteScore < mostWhite.score) {
+              mostWhite = { x, y, r, g, b, score: whiteScore };
+            }
+          }
+        }
 
-  // Look for 변환 (transform) menu
-  const transformMenu = page.getByText(/변환/);
-  const transformCount = await transformMenu.count();
-  console.log(`Found ${transformCount} elements matching "변환"`);
-
-  if (transformCount > 0) {
-    const texts = [];
-    for (let i = 0; i < transformCount; i++) {
-      const t = await transformMenu.nth(i).innerText().catch(() => '');
-      const tag = await transformMenu.nth(i).evaluate(el => el.tagName);
-      texts.push({ text: t, tag });
+        results.push({
+          canvasId: c.id,
+          canvasClass: c.className,
+          width: w,
+          height: h,
+          mostRed,
+          mostWhite
+        });
+      } catch (e) {
+        results.push({ error: e.message });
+      }
     }
-    console.log('변환 elements:', JSON.stringify(texts));
+    return results;
+  });
+}
 
-    // Click first 변환 menu
-    await transformMenu.first().click();
-    await sleep(1000);
-    await page.screenshot({ path: path.join(SCREENSHOTS_DIR, 'exp3_transform_menu.png') });
-    console.log('Screenshot saved: exp3_transform_menu.png');
-  }
-
-  // Look for +, -, ÷ operation buttons
-  const opBtns = await page.$$('button, .btn, [role="button"]');
-  for (const btn of opBtns) {
-    const text = await btn.innerText().catch(() => '');
-    if (['+', '-', '÷', '×', '*', '/'].some(op => text.includes(op))) {
-      console.log(`Found operation button: "${text}"`);
-    }
-  }
-
-  console.log('\n=== Step 7: 필터 menu - Sepia filter ===');
-
-  // Look for 필터 (filter) menu
-  const filterMenu = page.getByText(/필터/);
-  const filterCount = await filterMenu.count();
-  console.log(`Found ${filterCount} elements matching "필터"`);
-
-  if (filterCount > 0) {
-    await filterMenu.first().click();
-    await sleep(1000);
-    await page.screenshot({ path: path.join(SCREENSHOTS_DIR, 'filter_menu_open.png') });
-    console.log('Screenshot saved: filter_menu_open.png');
-
-    // Look for sepia option
-    const sepiaOption = page.getByText(/세피아|sepia/i);
-    const sepiaCount = await sepiaOption.count();
-    console.log(`Found ${sepiaCount} elements matching "세피아/sepia"`);
-
-    if (sepiaCount > 0) {
-      await sepiaOption.first().click();
-      await sleep(2000);
-      await page.screenshot({ path: path.join(SCREENSHOTS_DIR, 'exp4_sepia.png') });
-      console.log('Screenshot saved: exp4_sepia.png');
-    }
-  }
-
-  console.log('\n=== Collecting all page structure info ===');
-
-  // Dump all visible text on the page for analysis
+async function dumpPageInfo(page) {
   const allText = await page.evaluate(() => {
-    const walker = document.createTreeWalker(
-      document.body,
-      NodeFilter.SHOW_TEXT,
-      null
-    );
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null);
     const texts = [];
     let node;
     while ((node = walker.nextNode())) {
@@ -366,33 +89,283 @@ async function main() {
     }
     return [...new Set(texts)].join(' | ');
   });
-  console.log('\nAll page text (unique):', allText.substring(0, 2000));
+  console.log('Page text:', allText.substring(0, 3000));
 
-  // List all menus/buttons
   const menuItems = await page.evaluate(() => {
     const items = [];
-    const selectors = ['button', 'a[href]', '[role="button"]', 'li[onclick]', '.menu-item', '.nav-link'];
-    for (const sel of selectors) {
-      document.querySelectorAll(sel).forEach(el => {
-        const text = el.innerText?.trim() || el.value?.trim() || el.title?.trim() || '';
-        if (text) items.push({ tag: el.tagName, text, class: el.className?.substring(0, 50) });
-      });
-    }
-    return items.slice(0, 50);
+    document.querySelectorAll('button, a, [role="button"], li, .menu-item, .nav-link, .tab').forEach(el => {
+      const text = (el.innerText || el.value || el.title || '').trim();
+      if (text && text.length < 100) {
+        items.push({ tag: el.tagName, text, id: el.id, class: el.className.toString().substring(0, 60) });
+      }
+    });
+    return [...new Map(items.map(i => [i.text, i])).values()].slice(0, 80);
   });
-  console.log('\nMenu/button items:');
-  menuItems.forEach((item, i) => console.log(`  [${i}] ${item.tag}: "${item.text}" class="${item.class}"`));
+  console.log('\nInteractive elements:');
+  menuItems.forEach((item, i) => console.log(`  [${i}] ${item.tag}#${item.id}: "${item.text}" class="${item.class}"`));
+}
 
-  await page.screenshot({ path: path.join(SCREENSHOTS_DIR, 'final_state.png') });
-  console.log('\nScreenshot saved: final_state.png');
+async function main() {
+  const browser = await chromium.launch({
+    executablePath: CHROMIUM_PATH,
+    headless: true,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--ignore-certificate-errors',
+      '--ignore-ssl-errors'
+    ]
+  });
+
+  const context = await browser.newContext({
+    viewport: { width: 1400, height: 900 },
+    ignoreHTTPSErrors: true
+  });
+  const page = await context.newPage();
+
+  page.on('dialog', async dialog => {
+    console.log('Dialog:', dialog.type(), dialog.message());
+    await dialog.accept();
+  });
+
+  console.log('=== Step 1: Opening page ===');
+  try {
+    await page.goto('https://askmath.kosac.re.kr/ai/imageAnaly/imageAnalysis.do?menuPos=6', {
+      waitUntil: 'domcontentloaded',
+      timeout: 60000
+    });
+  } catch (e) {
+    console.log('Navigation error:', e.message);
+    // Try waiting for partial load
+    await sleep(3000);
+  }
+
+  const pageBodyText = await page.evaluate(() => document.body?.innerText?.substring(0, 200) || '').catch(() => '');
+  if (pageBodyText.includes('allowlist') || pageBodyText.includes('not in')) {
+    console.error('\nNETWORK BLOCKED: The host askmath.kosac.re.kr is not in the network egress allowlist.');
+    console.error('This sandbox environment restricts outbound connections to unlisted hosts.');
+    console.error('To run this script, you need to either:');
+    console.error('  1. Add askmath.kosac.re.kr to the network egress settings, OR');
+    console.error('  2. Run this script outside the sandbox environment.');
+    await page.screenshot({ path: path.join(SCREENSHOTS_DIR, 'blocked_page.png') });
+    await browser.close();
+    return;
+  }
+
+  await page.screenshot({ path: path.join(SCREENSHOTS_DIR, 'initial_page.png') });
+  console.log('Saved: initial_page.png');
+  console.log('Page title:', await page.title());
+  console.log('URL:', page.url());
+
+  await dumpPageInfo(page);
+
+  console.log('\n=== Step 2: Click template image ===');
+  // Try multiple strategies to find template images
+  const strategies = [
+    async () => {
+      // Strategy 1: images in a sidebar/list panel
+      const imgs = await page.$$('.sidebar img, .panel img, .list img, ul.thumb li img, .template-list img');
+      console.log(`Strategy 1: ${imgs.length} sidebar/panel images`);
+      if (imgs.length > 0) { await imgs[0].click(); return true; }
+    },
+    async () => {
+      // Strategy 2: any img with reasonable size
+      const allImgs = await page.$$('img');
+      console.log(`Strategy 2: ${allImgs.length} total images`);
+      for (const img of allImgs) {
+        const box = await img.boundingBox();
+        const src = await img.getAttribute('src').catch(() => '');
+        if (box && box.width > 40 && box.height > 40 && src && !src.includes('logo') && !src.includes('icon')) {
+          console.log(`Clicking img: ${src} size ${box.width}x${box.height}`);
+          await img.click({ timeout: 3000 });
+          return true;
+        }
+      }
+    },
+    async () => {
+      // Strategy 3: li items that might be templates
+      const items = await page.$$('li');
+      console.log(`Strategy 3: ${items.length} list items`);
+      for (const item of items) {
+        const box = await item.boundingBox();
+        if (box && box.width > 50 && box.height > 50) {
+          await item.click({ timeout: 3000 });
+          return true;
+        }
+      }
+    }
+  ];
+
+  let templateClicked = false;
+  for (const strategy of strategies) {
+    try {
+      if (await strategy()) {
+        templateClicked = true;
+        await sleep(2000);
+        break;
+      }
+    } catch (e) {
+      console.log('Strategy error:', e.message);
+    }
+  }
+  console.log('Template clicked:', templateClicked);
+  await page.screenshot({ path: path.join(SCREENSHOTS_DIR, 'after_template.png') });
+  console.log('Saved: after_template.png');
+
+  console.log('\n=== Step 3: 행렬 보기 (Matrix View) ===');
+  const matrixTexts = ['행렬 보기', '행렬보기', '행렬', 'Matrix'];
+  let matrixClicked = false;
+  for (const t of matrixTexts) {
+    if (await tryClick(page, t)) {
+      console.log(`Clicked: "${t}"`);
+      matrixClicked = true;
+      await sleep(1500);
+      break;
+    }
+  }
+  console.log('Matrix view clicked:', matrixClicked);
+  await page.screenshot({ path: path.join(SCREENSHOTS_DIR, 'exp1_matrix_view.png') });
+  console.log('Saved: exp1_matrix_view.png');
+
+  // Also try to read matrix values from the page
+  const matrixValues = await page.evaluate(() => {
+    const tables = document.querySelectorAll('table');
+    const results = [];
+    tables.forEach(t => {
+      const rows = Array.from(t.querySelectorAll('tr')).map(tr =>
+        Array.from(tr.querySelectorAll('td,th')).map(td => td.innerText.trim())
+      );
+      if (rows.length > 0) results.push(rows.slice(0, 5));
+    });
+    return results;
+  });
+  if (matrixValues.length > 0) {
+    console.log('Matrix table values (first 5 rows):');
+    matrixValues[0].forEach(row => console.log(' ', row.join('\t')));
+  }
+
+  console.log('\n=== Step 4: Eyedropper / Pixel Analysis ===');
+  const eyedropTexts = ['스포이트', '아이드로퍼', 'eyedropper', '색상 추출'];
+  for (const t of eyedropTexts) {
+    if (await tryClick(page, t)) {
+      console.log(`Clicked eyedropper: "${t}"`);
+      await sleep(1000);
+      break;
+    }
+  }
+
+  const pixelData = await getCanvasPixelData(page);
+  console.log(`\nCanvas pixel analysis (${pixelData.length} canvas elements found):`);
+  for (const result of pixelData) {
+    if (result.error) { console.log('  Error:', result.error); continue; }
+    console.log(`\nCanvas id="${result.canvasId}" class="${result.canvasClass}" size=${result.width}x${result.height}`);
+    console.log(`  MOST RED  pixel: x=${result.mostRed.x}, y=${result.mostRed.y} → RGB(${result.mostRed.r}, ${result.mostRed.g}, ${result.mostRed.b})`);
+    console.log(`  MOST WHITE pixel: x=${result.mostWhite.x}, y=${result.mostWhite.y} → RGB(${result.mostWhite.r}, ${result.mostWhite.g}, ${result.mostWhite.b})`);
+  }
+
+  if (pixelData.length === 0) {
+    console.log('No canvas elements with pixel data found. The image may be in an <img> tag.');
+    // Try to get pixel info via alternate means (e.g., hover over image and read displayed RGB)
+    const colorDisplay = await page.$('[class*="color"], [id*="color"], [class*="rgb"], [id*="rgb"]');
+    if (colorDisplay) {
+      const text = await colorDisplay.innerText().catch(() => '');
+      console.log('Color display element:', text);
+    }
+  }
+
+  console.log('\n=== Step 5: Channel Separation ===');
+  // Look for channel separation options
+  const channelTexts = ['R채널', 'G채널', 'B채널', 'R 채널', 'G 채널', 'B 채널', '채널분리', '채널 분리'];
+  for (const t of channelTexts) {
+    const loc = page.getByText(t, { exact: false });
+    const count = await loc.count();
+    if (count > 0) console.log(`Found channel option: "${t}" (${count} elements)`);
+  }
+
+  await page.screenshot({ path: path.join(SCREENSHOTS_DIR, 'exp2_channels.png') });
+  console.log('Saved: exp2_channels.png');
+
+  // Try to click each channel button and screenshot
+  for (const ch of ['R', 'G', 'B']) {
+    const chLoc = page.getByText(ch, { exact: true });
+    const count = await chLoc.count();
+    if (count > 0) {
+      await chLoc.first().click({ timeout: 2000 }).catch(() => {});
+      await sleep(1000);
+      await page.screenshot({ path: path.join(SCREENSHOTS_DIR, `exp2_channel_${ch}.png`) });
+      console.log(`Saved: exp2_channel_${ch}.png`);
+    }
+  }
+
+  console.log('\n=== Step 6: 변환 menu (+, -, ÷) ===');
+  const transformTexts = ['[변환]', '변환', 'Transform'];
+  for (const t of transformTexts) {
+    if (await tryClick(page, t)) {
+      console.log(`Clicked transform menu: "${t}"`);
+      await sleep(1000);
+      await page.screenshot({ path: path.join(SCREENSHOTS_DIR, 'exp3_transform_menu.png') });
+      console.log('Saved: exp3_transform_menu.png');
+      break;
+    }
+  }
+
+  // Look for operation buttons
+  const opTexts = ['+', '-', '÷', '×', '나누기', '더하기', '빼기', '곱하기'];
+  for (const op of opTexts) {
+    const loc = page.getByText(op, { exact: false });
+    const count = await loc.count();
+    if (count > 0) {
+      console.log(`Found operation "${op}" (${count} elements)`);
+    }
+  }
+
+  // Try clicking + operation
+  for (const op of ['+', '더하기']) {
+    if (await tryClick(page, op)) {
+      console.log(`Clicked operation: "${op}"`);
+      await sleep(1000);
+      await page.screenshot({ path: path.join(SCREENSHOTS_DIR, 'exp3_transform_add.png') });
+      console.log('Saved: exp3_transform_add.png');
+      break;
+    }
+  }
+
+  console.log('\n=== Step 7: 필터 menu - Sepia ===');
+  const filterTexts = ['[필터]', '필터', 'Filter'];
+  for (const t of filterTexts) {
+    if (await tryClick(page, t)) {
+      console.log(`Clicked filter menu: "${t}"`);
+      await sleep(1000);
+      await page.screenshot({ path: path.join(SCREENSHOTS_DIR, 'filter_menu_open.png') });
+      console.log('Saved: filter_menu_open.png');
+      break;
+    }
+  }
+
+  const sepiaTexts = ['세피아', 'sepia', 'Sepia'];
+  for (const t of sepiaTexts) {
+    if (await tryClick(page, t)) {
+      console.log(`Clicked sepia: "${t}"`);
+      await sleep(2000);
+      await page.screenshot({ path: path.join(SCREENSHOTS_DIR, 'exp4_sepia.png') });
+      console.log('Saved: exp4_sepia.png');
+      break;
+    }
+  }
+
+  console.log('\n=== Final state screenshot ===');
+  await page.screenshot({ path: path.join(SCREENSHOTS_DIR, 'final_state.png'), fullPage: true });
+  console.log('Saved: final_state.png');
 
   await browser.close();
-  console.log('\n=== Done ===');
-  console.log('All screenshots in:', SCREENSHOTS_DIR);
-  console.log('Files:', fs.readdirSync(SCREENSHOTS_DIR).join(', '));
+  console.log('\n=== COMPLETE ===');
+  console.log('Screenshots directory:', SCREENSHOTS_DIR);
+  const files = fs.readdirSync(SCREENSHOTS_DIR);
+  console.log('Files:', files.join(', '));
 }
 
 main().catch(err => {
-  console.error('Fatal error:', err);
+  console.error('Fatal error:', err.message);
   process.exit(1);
 });
