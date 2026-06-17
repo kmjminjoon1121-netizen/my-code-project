@@ -10,28 +10,31 @@ async def main():
         page = await context.new_page()
 
         await page.goto("https://askmath.kosac.re.kr/ai/imageAnaly/imageAnalysis.do?menuPos=6")
-        await page.wait_for_load_state("networkidle")
-        await asyncio.sleep(3)
+        await asyncio.sleep(10)
 
         # Take initial screenshot
         await page.screenshot(path="/home/user/my-code-project/initial.png", full_page=True)
-        print("Initial screenshot taken")
 
-        # Print page content for analysis
-        content = await page.content()
-        with open("/home/user/my-code-project/page_content.html", "w") as f:
-            f.write(content)
-        print("Page content saved")
+        # Print all text elements
+        texts = await page.evaluate('''() => {
+            const all = document.querySelectorAll('*');
+            const texts = [];
+            for (const el of all) {
+                if (el.children.length === 0 && el.textContent.trim()) {
+                    texts.push({tag: el.tagName, text: el.textContent.trim().substring(0, 80), cls: el.className, id: el.id});
+                }
+            }
+            return texts;
+        }''')
+        for t in texts[:150]:
+            print(t)
 
-        # Look for buttons/menus
-        buttons = await page.query_selector_all("button, .btn, [class*='menu'], [class*='template'], li, a")
-        for b in buttons[:50]:
-            text = await b.text_content()
-            tag = await b.evaluate("el => el.tagName")
-            cls = await b.get_attribute("class") or ""
-            iid = await b.get_attribute("id") or ""
-            if text and text.strip():
-                print(f"Element: {tag}, id: {iid[:30]}, class: {cls[:60]}, text: {text.strip()[:60]}")
+        # Save HTML
+        html = await page.content()
+        with open("/home/user/my-code-project/page.html", "w", encoding="utf-8") as f:
+            f.write(html)
+        print("\n--- HTML saved ---")
+        print(f"HTML length: {len(html)}")
 
         await browser.close()
 
