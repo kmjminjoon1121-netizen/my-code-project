@@ -17,18 +17,16 @@ async def main():
         await page.screenshot(path="initial.png")
         print("Initial screenshot saved: initial.png")
 
-        texts = await page.evaluate('''
-            () => {
-                const all = document.querySelectorAll('*');
-                const texts = [];
-                for (const el of all) {
-                    if (el.children.length === 0 && el.textContent.trim()) {
-                        texts.push({tag: el.tagName, text: el.textContent.trim().substring(0, 80), cls: el.className, id: el.id});
-                    }
+        texts = await page.evaluate('''() => {
+            const all = document.querySelectorAll('*');
+            const texts = [];
+            for (const el of all) {
+                if (el.children.length === 0 && el.textContent.trim()) {
+                    texts.push({tag: el.tagName, text: el.textContent.trim().substring(0, 80), cls: el.className, id: el.id});
                 }
-                return texts;
             }
-        ''')
+            return texts;
+        }''')
         print("=== Page text elements ===")
         for t in texts:
             print(t)
