@@ -209,10 +209,10 @@
 </header>
 <div class="container">
   <div class="tabs">
-    <button class="tab active" onclick="showTab('translator')">번역기</button>
-    <button class="tab" onclick="showTab('vocab')">어휘</button>
-    <button class="tab" onclick="showTab('phonology')">음운론</button>
-    <button class="tab" onclick="showTab('grammar')">문법</button>
+    <button class="tab active" onclick="showTab('translator', this)">번역기</button>
+    <button class="tab" onclick="showTab('vocab', this)">어휘</button>
+    <button class="tab" onclick="showTab('phonology', this)">음운론</button>
+    <button class="tab" onclick="showTab('grammar', this)">문법</button>
   </div>
 
   <!-- 번역기 탭 -->
@@ -601,7 +601,8 @@ function translate() {
     }
   }
 
-  outputEl.textContent = outputLines.join('\n');
+  const finalOutput = outputLines.join('\n');
+  outputEl.textContent = finalOutput || '(결과 없음)';
   analysisEl.innerHTML = analysisLines.join('');
   analysisBox.style.display = analysisLines.length > 0 ? 'block' : 'none';
 }
@@ -636,11 +637,11 @@ function showAllVocab() {
 }
 
 // ===== 탭 전환 =====
-function showTab(name) {
+function showTab(name, btn) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  document.querySelector(`#tab-${name}`).classList.add('active');
-  event.target.classList.add('active');
+  document.querySelector('#tab-' + name).classList.add('active');
+  if (btn) btn.classList.add('active');
   if (name === 'vocab') showAllVocab();
 }
 
