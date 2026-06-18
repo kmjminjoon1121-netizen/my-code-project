@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>자소크어 번역기</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    min-height: 100vh;
+  }
+  header {
+    background: linear-gradient(135deg, #16213e, #0f3460);
+    padding: 24px 32px;
+    border-bottom: 2px solid #e94560;
+  }
+  header h1 {
+    font-size: 2rem;
+    color: #e94560;
+    letter-spacing: 2px;
+  }
+  header p {
+    color: #a0a8c0;
+    margin-top: 4px;
+    font-size: 0.9rem;
+  }
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 32px 24px;
+  }
+  .tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+  }
+  .tab {
+    padding: 10px 22px;
+    border-radius: 8px 8px 0 0;
+    border: none;
+    background: #16213e;
+    color: #a0a8c0;
+    cursor: pointer;
+    font-size: 0.95rem;
+    transition: all 0.2s;
+  }
+  .tab.active {
+    background: #0f3460;
+    color: #e94560;
+    border-bottom: 2px solid #e94560;
+  }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .card {
+    background: #16213e;
+    border-radius: 0 12px 12px 12px;
+    padding: 28px;
+    border: 1px solid #0f3460;
+  }
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+  label {
+    display: block;
+    font-size: 0.85rem;
+    color: #a0a8c0;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  textarea, input[type="text"] {
+    width: 100%;
+    background: #0d1b2a;
+    border: 1px solid #0f3460;
+    border-radius: 8px;
+    color: #e0e0e0;
+    padding: 14px;
+    font-size: 1.05rem;
+    font-family: inherit;
+    resize: vertical;
+    transition: border-color 0.2s;
+  }
+  textarea:focus, input:focus {
+    outline: none;
+    border-color: #e94560;
+  }
+  textarea { min-height: 140px; }
+  .result-box {
+    background: #0d1b2a;
+    border: 1px solid #0f3460;
+    border-radius: 8px;
+    padding: 14px;
+    min-height: 140px;
+    font-size: 1.05rem;
+    line-height: 1.8;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .result-box .word {
+    display: inline-block;
+    color: #e0e0e0;
+  }
+  .result-box .noun { color: #64b5f6; }
+  .result-box .special { color: #ffb74d; }
+  .btn {
+    margin-top: 16px;
+    padding: 12px 28px;
+    background: #e94560;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .btn:hover { background: #c73652; }
+  .btn-group { display: flex; gap: 10px; flex-wrap: wrap; }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: bold;
+  }
+  .badge-blue { background: #1565c0; color: #90caf9; }
+  .badge-red { background: #b71c1c; color: #ef9a9a; }
+  .badge-green { background: #1b5e20; color: #a5d6a7; }
+  .badge-orange { background: #e65100; color: #ffcc80; }
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #0f3460; font-size: 0.9rem; }
+  th { background: #0f3460; color: #e94560; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; }
+  tr:hover td { background: #1a2744; }
+  .section-title {
+    font-size: 1.1rem;
+    color: #e94560;
+    margin: 20px 0 10px;
+    padding-left: 8px;
+    border-left: 3px solid #e94560;
+  }
+  .info-box {
+    background: #0f3460;
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin: 12px 0;
+    font-size: 0.9rem;
+    line-height: 1.7;
+    color: #c0c8e0;
+  }
+  .phoneme {
+    font-family: monospace;
+    background: #1a2744;
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: #64b5f6;
+  }
+  .vocab-search { display: flex; gap: 10px; margin-bottom: 16px; }
+  .vocab-search input { flex: 1; min-height: auto; }
+  #vocabResults { margin-top: 8px; }
+  .vocab-card {
+    background: #0d1b2a;
+    border: 1px solid #0f3460;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 8px;
+  }
+  .vocab-card .jasok { font-size: 1.15rem; color: #64b5f6; font-weight: bold; }
+  .vocab-card .korean { color: #a0a8c0; font-size: 0.9rem; margin-top: 2px; }
+  .vocab-card .pos { float: right; }
+  .steps { counter-reset: step; }
+  .step {
+    display: flex;
+    gap: 14px;
+    margin-bottom: 14px;
+  }
+  .step-num {
+    min-width: 28px;
+    height: 28px;
+    background: #e94560;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 0.85rem;
+    margin-top: 2px;
+  }
+  .example-block {
+    background: #0d1b2a;
+    border-left: 3px solid #64b5f6;
+    padding: 10px 14px;
+    margin: 8px 0;
+    border-radius: 0 6px 6px 0;
+    font-family: monospace;
+    font-size: 0.95rem;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>자소크어 번역기</h1>
+  <p>꿩 먹고 알먹는 자소크어 — 52세기 와기제 리 자소크어 편</p>
+</header>
+<div class="container">
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('translator')">번역기</button>
+    <button class="tab" onclick="showTab('vocab')">어휘</button>
+    <button class="tab" onclick="showTab('phonology')">음운론</button>
+    <button class="tab" onclick="showTab('grammar')">문법</button>
+  </div>
+
+  <!-- 번역기 탭 -->
+  <div id="tab-translator" class="panel active">
+    <div class="card">
+      <div class="two-col">
+        <div>
+          <label>한국어 / 영어 입력</label>
+          <textarea id="inputText" placeholder="번역할 단어나 문장을 입력하세요&#10;예: 나는 친구를 만난다"></textarea>
+          <div class="btn-group">
+            <button class="btn" onclick="translate()">번역하기</button>
+            <button class="btn" style="background:#0f3460" onclick="clearAll()">지우기</button>
+          </div>
+        </div>
+        <div>
+          <label>자소크어 결과</label>
+          <div class="result-box" id="outputText">번역 결과가 여기에 표시됩니다.</div>
+        </div>
+      </div>
+      <div id="analysisBox" style="margin-top:20px; display:none;">
+        <p class="section-title">분석</p>
+        <div id="analysisContent"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 어휘 탭 -->
+  <div id="tab-vocab" class="panel">
+    <div class="card">
+      <p class="section-title">어휘 검색</p>
+      <div class="vocab-search">
+        <input type="text" id="vocabInput" placeholder="한국어 또는 자소크어 단어 검색..." oninput="searchVocab()">
+      </div>
+      <div id="vocabResults"></div>
+      <p class="section-title">전체 어휘 목록</p>
+      <div id="vocabAll"></div>
+    </div>
+  </div>
+
+  <!-- 음운론 탭 -->
+  <div id="tab-phonology" class="panel">
+    <div class="card">
+      <p class="section-title">자소크어 알파벳 (24자 기본)</p>
+      <div class="info-box">
+        자소크어는 라틴 알파벳 기반이며, 각 문자는 고정된 발음값을 가집니다. 대소문자 구별: <strong>명사는 첫 글자를 대문자</strong>로 씁니다.
+      </div>
+
+      <p class="section-title">자음 (Consonants)</p>
+      <table>
+        <tr><th>자소크어</th><th>IPA</th><th>한국어 대응</th><th>비고</th></tr>
+        <tr><td><span class="phoneme">G g</span></td><td>/g/</td><td>ㄱ</td><td></td></tr>
+        <tr><td><span class="phoneme">N n</span></td><td>/n/</td><td>ㄴ</td><td></td></tr>
+        <tr><td><span class="phoneme">M m</span></td><td>/m/</td><td>ㅁ</td><td></td></tr>
+        <tr><td><span class="phoneme">S s</span></td><td>/s/</td><td>ㅅ</td><td></td></tr>
+        <tr><td><span class="phoneme">D d</span></td><td>/d/</td><td>ㄷ</td><td></td></tr>
+        <tr><td><span class="phoneme">Z z</span></td><td>/z/ ~ /dʒ/</td><td>ㅈ</td><td></td></tr>
+        <tr><td><span class="phoneme">L l</span></td><td>/l/</td><td>ㄹ (어두)</td><td></td></tr>
+        <tr><td><span class="phoneme">R r</span></td><td>/r/</td><td>ㄹ (어중/어말)</td><td></td></tr>
+        <tr><td><span class="phoneme">K k</span></td><td>/kʰ/</td><td>ㅋ</td><td>격음</td></tr>
+        <tr><td><span class="phoneme">T t</span></td><td>/tʰ/</td><td>ㅌ</td><td>격음</td></tr>
+        <tr><td><span class="phoneme">P p</span></td><td>/pʰ/</td><td>ㅍ</td><td>격음</td></tr>
+        <tr><td><span class="phoneme">F f</span></td><td>/f/</td><td>(f 소리)</td><td></td></tr>
+        <tr><td><span class="phoneme">B b</span></td><td>/b/</td><td>ㅂ</td><td></td></tr>
+        <tr><td><span class="phoneme">V v</span></td><td>/v/</td><td>(v 소리)</td><td></td></tr>
+        <tr><td><span class="phoneme">H h</span></td><td>/h/</td><td>ㅎ</td><td></td></tr>
+        <tr><td><span class="phoneme">W w</span></td><td>/w/</td><td>ㅗ/ㅜ (반모음)</td><td></td></tr>
+        <tr><td><span class="phoneme">Y y</span></td><td>/j/</td><td>ㅣ (반모음)</td><td></td></tr>
+        <tr><td><span class="phoneme">X x</span></td><td>/ʃ/</td><td>ㅅ+ㅣ (sh)</td><td>어두 불가 → ex-</td></tr>
+        <tr><td><span class="phoneme">Q q</span></td><td>/k/</td><td>ㅋ/ㄱ</td><td>항상 qu 형태, 어말 → -que</td></tr>
+      </table>
+
+      <p class="section-title">모음 (Vowels)</p>
+      <table>
+        <tr><th>자소크어</th><th>IPA</th><th>한국어 대응</th></tr>
+        <tr><td><span class="phoneme">A a</span></td><td>/a/</td><td>ㅏ</td></tr>
+        <tr><td><span class="phoneme">O o</span></td><td>/o/</td><td>ㅗ</td></tr>
+        <tr><td><span class="phoneme">U u</span></td><td>/u/</td><td>ㅜ</td></tr>
+        <tr><td><span class="phoneme">I i</span></td><td>/i/</td><td>ㅣ</td></tr>
+        <tr><td><span class="phoneme">E e</span></td><td>/e/</td><td>ㅔ/ㅐ</td></tr>
+      </table>
+
+      <p class="section-title">다이어크리틱 (Diacritics)</p>
+      <table>
+        <tr><th>기호</th><th>이름</th><th>발음</th><th>예시</th></tr>
+        <tr><td><span class="phoneme">á</span></td><td>양음부호 (a)</td><td>/ja/</td><td>á → [ja]</td></tr>
+        <tr><td><span class="phoneme">ó</span></td><td>양음부호 (o)</td><td>/jo/</td><td>ó → [jo]</td></tr>
+        <tr><td><span class="phoneme">ú</span></td><td>양음부호 (u)</td><td>/ju/</td><td>ú → [ju]</td></tr>
+        <tr><td><span class="phoneme">í</span></td><td>양음부호 (i)</td><td>/ji/</td><td>í → [ji]</td></tr>
+        <tr><td><span class="phoneme">ý</span></td><td>양음부호 (y)</td><td>/ji/</td><td>ý → [ji]</td></tr>
+        <tr><td><span class="phoneme">é</span></td><td>양음부호 (e)</td><td>/e/</td><td>속격 조사로 사용</td></tr>
+        <tr><td><span class="phoneme">ü</span></td><td>트레마 (u)</td><td>/y/ ~ /ü/</td><td>ùm (시제 어미)</td></tr>
+      </table>
+
+      <p class="section-title">잔음 (殘音, Residual Sound)</p>
+      <div class="info-box">
+        자음을 두 번 겹쳐 쓰면 <strong>잔음</strong>을 나타냅니다.<br>
+        잔음 = 자음을 발음하고, 소리를 끝내면서 약한 중설 중모음(schwa [ə])을 내는 것.<br>
+        예: <span class="phoneme">ss</span> = /sə/, <span class="phoneme">ll</span> = /lə/, <span class="phoneme">nn</span> = /nə/
+      </div>
+
+      <p class="section-title">특수 정서법 규칙</p>
+      <div class="info-box">
+        <strong>X 규칙:</strong> x는 어두(단어 맨 앞)에 올 수 없음. /ʃ/ 음소로 시작하는 단어는 <span class="phoneme">ex-</span>로 시작하며, 이 때 e는 묵음.<br><br>
+        <strong>Q 규칙:</strong> q는 항상 u와 함께 <span class="phoneme">qu</span> 형태로만 씀. qu는 단어 끝에 올 수 없으므로, /k/ 음소로 끝나는 단어(고유명사 제외)는 <span class="phoneme">-que</span>로 끝내며 e는 묵음.<br><br>
+        <strong>예:</strong> /ʃi/ 로 시작하는 단어 → <span class="phoneme">Exi...</span> (어두 e 묵음)<br>
+        /pak/ 으로 끝나는 단어 → <span class="phoneme">...paque</span> (어말 e 묵음)
+      </div>
+    </div>
+  </div>
+
+  <!-- 문법 탭 -->
+  <div id="tab-grammar" class="panel">
+    <div class="card">
+      <p class="section-title">기본 어순</p>
+      <div class="info-box">
+        자소크어의 기본 어순은 <strong>SOV (주어-목적어-동사)</strong>이지만, 조사가 격을 표시하므로 자유어순이 허용됩니다.<br>
+        어순에 따라 조사의 위치가 달라집니다: 동사 앞 단어는 뒤에 조사, 동사 뒤 단어는 앞에 조사.
+      </div>
+
+      <p class="section-title">조사 (Particles)</p>
+      <table>
+        <tr><th>격</th><th>조사</th><th>의미</th><th>예</th></tr>
+        <tr><td>주격 (Nominative)</td><td><span class="phoneme">ri</span></td><td>은/는/이/가</td><td>Miros ri = 나는</td></tr>
+        <tr><td>목적격 (Accusative)</td><td><span class="phoneme">lo</span></td><td>을/를</td><td>Ziroque lo = 친구를</td></tr>
+        <tr><td>속격 (Genitive)</td><td><span class="phoneme">é</span></td><td>의</td><td>Miros é = 나의</td></tr>
+        <tr><td>보조격 (Instrumental)</td><td><span class="phoneme">iz</span></td><td>으로/로</td><td>동사 iz = ~이다/되다</td></tr>
+        <tr><td>여격 (Dative)</td><td><span class="phoneme">nu</span></td><td>에게/한테</td><td>Miros nu = 나에게</td></tr>
+        <tr><td>처격 (Locative)</td><td><span class="phoneme">da</span></td><td>에/에서</td><td>Sate da = 사트에</td></tr>
+      </table>
+
+      <p class="section-title">시제 (Tense)</p>
+      <table>
+        <tr><th>시제</th><th>어미</th><th>예</th></tr>
+        <tr><td>현재 / 미래</td><td><span class="phoneme">-ùm</span></td><td>quovizaxùm = 만난다</td></tr>
+        <tr><td>과거</td><td><span class="phoneme">-it</span></td><td>quovizaxit = 만났다</td></tr>
+        <tr><td>현재진행</td><td><span class="phoneme">-ùma</span></td><td>quovizaxùma = 만나고 있다</td></tr>
+      </table>
+
+      <p class="section-title">부정 (Negation)</p>
+      <div class="info-box">
+        동사 앞에 부정 접두사 <span class="phoneme">na-</span>를 붙입니다.<br>
+        예: naquovizaxùm = 만나지 않는다
+      </div>
+
+      <p class="section-title">예문</p>
+      <div class="example-block">
+        나는 친구를 만난다.<br>
+        → (SOV) Miros ri Ziroque lo quovizaxùm.<br>
+        → (SVO) Miros ri quovizaxùm lo Ziroque.
+      </div>
+      <div class="example-block">
+        나의 친구<br>
+        → Miros é Ziroque
+      </div>
+
+      <p class="section-title">명사 복수</p>
+      <div class="info-box">
+        명사에 접미사 <span class="phoneme">-si</span>를 붙여 복수를 나타냅니다.<br>
+        예: Ziroque → Ziroque-si = 친구들
+      </div>
+
+      <p class="section-title">의문문</p>
+      <div class="info-box">
+        문장 끝에 <span class="phoneme">e</span>를 붙이면 의문문, <span class="phoneme">a</span>를 붙이면 감탄문이 됩니다.<br>
+        예: quovizaxùm e? = 만나나요?
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== 어휘 사전 =====
+const VOCAB = [
+  // 대명사
+  { jasok: 'Miros', korean: '나, 저', pos: '대명사', eng: 'I, me' },
+  { jasok: 'Tiros', korean: '너, 당신', pos: '대명사', eng: 'you' },
+  { jasok: 'Siros', korean: '그, 그녀, 그것', pos: '대명사', eng: 'he, she, it' },
+  { jasok: 'Mirosi', korean: '우리', pos: '대명사', eng: 'we' },
+  { jasok: 'Tirosi', korean: '너희', pos: '대명사', eng: 'you (plural)' },
+  { jasok: 'Sirosi', korean: '그들', pos: '대명사', eng: 'they' },
+
+  // 명사
+  { jasok: 'Ziroque', korean: '친구', pos: '명사', eng: 'friend' },
+  { jasok: 'Sate', korean: '사트 (세계 이름)', pos: '고유명사', eng: 'Sat (world name)' },
+  { jasok: 'Zasoque', korean: '자소크 (나라 이름)', pos: '고유명사', eng: 'Zasok (country name)' },
+  { jasok: 'Nade', korean: '이름', pos: '명사', eng: 'name' },
+  { jasok: 'Lame', korean: '집, 가정', pos: '명사', eng: 'home, house' },
+  { jasok: 'Dore', korean: '길, 도로', pos: '명사', eng: 'road, way' },
+  { jasok: 'Mone', korean: '물', pos: '명사', eng: 'water' },
+  { jasok: 'Sole', korean: '하늘', pos: '명사', eng: 'sky' },
+  { jasok: 'Tane', korean: '땅, 흙', pos: '명사', eng: 'earth, land' },
+  { jasok: 'Fole', korean: '불', pos: '명사', eng: 'fire' },
+  { jasok: 'Bose', korean: '바람', pos: '명사', eng: 'wind' },
+  { jasok: 'Gade', korean: '나무', pos: '명사', eng: 'tree' },
+  { jasok: 'Rime', korean: '시간', pos: '명사', eng: 'time' },
+  { jasok: 'Vide', korean: '삶, 생명', pos: '명사', eng: 'life' },
+  { jasok: 'Kore', korean: '마음, 정신', pos: '명사', eng: 'mind, heart' },
+  { jasok: 'Nobe', korean: '책', pos: '명사', eng: 'book' },
+  { jasok: 'Paze', korean: '말, 언어', pos: '명사', eng: 'word, language' },
+  { jasok: 'Zage', korean: '자소크어 (언어)', pos: '고유명사', eng: 'Jasokeo (the language)' },
+
+  // 동사 (어근)
+  { jasok: 'quovizax-', korean: '만나다', pos: '동사', eng: 'to meet' },
+  { jasok: 'iz-', korean: '이다, 되다', pos: '동사', eng: 'to be, to become' },
+  { jasok: 'dom-', korean: '가다', pos: '동사', eng: 'to go' },
+  { jasok: 'ven-', korean: '오다', pos: '동사', eng: 'to come' },
+  { jasok: 'lok-', korean: '보다', pos: '동사', eng: 'to see, to look' },
+  { jasok: 'sol-', korean: '말하다', pos: '동사', eng: 'to speak, to say' },
+  { jasok: 'nos-', korean: '알다', pos: '동사', eng: 'to know' },
+  { jasok: 'vol-', korean: '원하다', pos: '동사', eng: 'to want' },
+  { jasok: 'faz-', korean: '하다', pos: '동사', eng: 'to do, to make' },
+  { jasok: 'giv-', korean: '주다', pos: '동사', eng: 'to give' },
+  { jasok: 'tak-', korean: '받다, 가지다', pos: '동사', eng: 'to take, to have' },
+  { jasok: 'zul-', korean: '살다', pos: '동사', eng: 'to live' },
+  { jasok: 'mor-', korean: '죽다', pos: '동사', eng: 'to die' },
+  { jasok: 'lez-', korean: '읽다', pos: '동사', eng: 'to read' },
+  { jasok: 'skrib-', korean: '쓰다', pos: '동사', eng: 'to write' },
+
+  // 형용사
+  { jasok: 'bone', korean: '좋은', pos: '형용사', eng: 'good' },
+  { jasok: 'male', korean: '나쁜', pos: '형용사', eng: 'bad' },
+  { jasok: 'grande', korean: '큰', pos: '형용사', eng: 'big, great' },
+  { jasok: 'pite', korean: '작은', pos: '형용사', eng: 'small' },
+  { jasok: 'nove', korean: '새로운', pos: '형용사', eng: 'new' },
+  { jasok: 'vete', korean: '오래된', pos: '형용사', eng: 'old' },
+  { jasok: 'bele', korean: '아름다운', pos: '형용사', eng: 'beautiful' },
+
+  // 부사/기타
+  { jasok: 'noque', korean: '아니, 아니요', pos: '부사', eng: 'no, not' },
+  { jasok: 'yase', korean: '예, 네', pos: '부사', eng: 'yes' },
+  { jasok: 'ezone', korean: '지금', pos: '부사', eng: 'now' },
+  { jasok: 'avante', korean: '전에', pos: '부사', eng: 'before, ago' },
+  { jasok: 'poste', korean: '후에, 나중에', pos: '부사', eng: 'after, later' },
+  { jasok: 'zune', korean: '함께, 같이', pos: '부사', eng: 'together, with' },
+
+  // 인사
+  { jasok: 'Bon nome!', korean: '안녕하세요! (좋은 날)', pos: '인사', eng: 'Good day! (greeting)' },
+  { jasok: 'Bon rime!', korean: '좋은 시간 되세요!', pos: '인사', eng: 'Have a good time!' },
+  { jasok: 'Vale!', korean: '잘 가요! 안녕히 가세요!', pos: '인사', eng: 'Farewell! Goodbye!' },
+  { jasok: 'Gratize!', korean: '감사합니다!', pos: '인사', eng: 'Thank you!' },
+  { jasok: 'Mizere!', korean: '미안합니다!', pos: '인사', eng: 'Sorry!' },
+];
+
+// ===== 자음/모음 매핑 =====
+const INITIAL_MAP = {
+  'ㄱ': 'g', 'ㄲ': 'g', 'ㄴ': 'n', 'ㄷ': 'd', 'ㄸ': 'd', 'ㄹ': 'l',
+  'ㅁ': 'm', 'ㅂ': 'b', 'ㅃ': 'b', 'ㅅ': 's', 'ㅆ': 's', 'ㅇ': '',
+  'ㅈ': 'z', 'ㅉ': 'z', 'ㅊ': 'z', 'ㅋ': 'k', 'ㅌ': 't', 'ㅍ': 'p', 'ㅎ': 'h'
+};
+
+const VOWEL_MAP = {
+  'ㅏ': 'a',  'ㅐ': 'e',  'ㅑ': 'ja', 'ㅒ': 'je', 'ㅓ': 'e',  'ㅔ': 'e',
+  'ㅕ': 'je', 'ㅖ': 'je', 'ㅗ': 'o',  'ㅘ': 'wa', 'ㅙ': 'we', 'ㅚ': 'we',
+  'ㅛ': 'jo', 'ㅜ': 'u',  'ㅝ': 'we', 'ㅞ': 'we', 'ㅟ': 'wi', 'ㅠ': 'ju',
+  'ㅡ': 'u',  'ㅢ': 'i',  'ㅣ': 'i'
+};
+
+const FINAL_MAP = {
+  '': '', 'ㄱ': 'g', 'ㄲ': 'g', 'ㄳ': 'g', 'ㄴ': 'n', 'ㄵ': 'n',
+  'ㄶ': 'n', 'ㄷ': 'd', 'ㄹ': 'l', 'ㄺ': 'g', 'ㄻ': 'm', 'ㄼ': 'b',
+  'ㄽ': 's', 'ㄾ': 't', 'ㄿ': 'p', 'ㅀ': 'h', 'ㅁ': 'm', 'ㅂ': 'b',
+  'ㅄ': 's', 'ㅅ': 's', 'ㅆ': 's', 'ㅇ': 'ng', 'ㅈ': 'z', 'ㅊ': 'z',
+  'ㅋ': 'k', 'ㅌ': 't', 'ㅍ': 'p', 'ㅎ': 'h'
+};
+
+const INITIAL_CONSONANTS = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+const VOWELS = ['ㅏ','ㅐ','ㅑ','ㅒ','ㅓ','ㅔ','ㅕ','ㅖ','ㅗ','ㅘ','ㅙ','ㅚ','ㅛ','ㅜ','ㅝ','ㅞ','ㅟ','ㅠ','ㅡ','ㅢ','ㅣ'];
+const FINAL_CONSONANTS = ['','ㄱ','ㄲ','ㄳ','ㄴ','ㄵ','ㄶ','ㄷ','ㄹ','ㄺ','ㄻ','ㄼ','ㄽ','ㄾ','ㄿ','ㅀ','ㅁ','ㅂ','ㅄ','ㅅ','ㅆ','ㅇ','ㅈ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+
+function decomposeHangul(char) {
+  const code = char.charCodeAt(0) - 0xAC00;
+  if (code < 0 || code > 11171) return null;
+  const final = code % 28;
+  const vowel = Math.floor((code - final) / 28) % 21;
+  const initial = Math.floor(code / 28 / 21);
+  return {
+    initial: INITIAL_CONSONANTS[initial],
+    vowel: VOWELS[vowel],
+    final: FINAL_CONSONANTS[final]
+  };
+}
+
+function syllableToJasok(char) {
+  const d = decomposeHangul(char);
+  if (!d) return null;
+  let result = (INITIAL_MAP[d.initial] || '') + (VOWEL_MAP[d.vowel] || '') + (FINAL_MAP[d.final] || '');
+  return result;
+}
+
+function applyOrthography(word) {
+  // x 규칙: 어두 sh(시/샤 등) → ex-
+  if (word.startsWith('si') || word.startsWith('sha') || word.startsWith('shi')) {
+    word = 'ex' + word.slice(2);
+  }
+  // 어말 k → -que
+  if (word.endsWith('k') && word.length > 1) {
+    word = word.slice(0, -1) + 'que';
+  }
+  // 어말 g → -gue (선택적)
+  // 잔음: 받침 처리 - 이미 doubled consonant으로 표현됨
+  return word;
+}
+
+function koreanWordToJasok(word) {
+  // 사전에서 먼저 검색
+  const found = VOCAB.find(v =>
+    v.korean.split(',').some(k => k.trim() === word) ||
+    v.jasok.replace('-', '') === word
+  );
+  if (found) {
+    return { jasok: found.jasok.replace('-', ''), isVocab: true, pos: found.pos };
+  }
+
+  // 음운 변환
+  let result = '';
+  for (const char of word) {
+    const converted = syllableToJasok(char);
+    if (converted !== null) {
+      result += converted;
+    } else if (/[a-zA-Z]/.test(char)) {
+      result += char;
+    } else {
+      result += char;
+    }
+  }
+  result = applyOrthography(result);
+  return { jasok: result, isVocab: false, pos: '?' };
+}
+
+function translate() {
+  const input = document.getElementById('inputText').value.trim();
+  if (!input) return;
+
+  const outputEl = document.getElementById('outputText');
+  const analysisEl = document.getElementById('analysisContent');
+  const analysisBox = document.getElementById('analysisBox');
+
+  const lines = input.split('\n');
+  let outputLines = [];
+  let analysisLines = [];
+
+  for (const line of lines) {
+    if (!line.trim()) { outputLines.push(''); continue; }
+
+    const tokens = line.split(/\s+/);
+    let jasokTokens = [];
+    let analysisItems = [];
+
+    for (const token of tokens) {
+      // 구두점 분리
+      const punctMatch = token.match(/^([\w가-힣]+)([.,!?]?)$/);
+      const word = punctMatch ? punctMatch[1] : token;
+      const punct = punctMatch ? punctMatch[2] : '';
+
+      if (/[가-힣]/.test(word)) {
+        const res = koreanWordToJasok(word);
+        // 명사 추정 (is noun if pos is 명사/대명사/고유명사 or capitalized output)
+        let isNoun = res.pos && (res.pos.includes('명사') || res.pos.includes('대명사'));
+        let jasokWord = res.jasok;
+        if (isNoun && jasokWord.length > 0) {
+          jasokWord = jasokWord.charAt(0).toUpperCase() + jasokWord.slice(1);
+        }
+        jasokTokens.push(jasokWord + punct);
+        analysisItems.push({ original: word, jasok: jasokWord, isVocab: res.isVocab, pos: res.pos });
+      } else {
+        jasokTokens.push(token);
+      }
+    }
+
+    outputLines.push(jasokTokens.join(' '));
+
+    if (analysisItems.length > 0) {
+      let html = '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;">';
+      for (const item of analysisItems) {
+        html += `<div style="background:#0d1b2a;border:1px solid #0f3460;border-radius:6px;padding:8px 12px;min-width:100px;">
+          <div style="font-size:0.8rem;color:#a0a8c0;">${item.original}</div>
+          <div style="font-size:1rem;color:#64b5f6;font-weight:bold;">${item.jasok}</div>
+          <div style="font-size:0.75rem;margin-top:4px;">
+            <span class="badge ${item.isVocab ? 'badge-green' : 'badge-orange'}">${item.isVocab ? '사전' : '음운변환'}</span>
+            ${item.pos !== '?' ? `<span class="badge badge-blue" style="margin-left:4px;">${item.pos}</span>` : ''}
+          </div>
+        </div>`;
+      }
+      html += '</div>';
+      analysisLines.push(html);
+    }
+  }
+
+  outputEl.textContent = outputLines.join('\n');
+  analysisEl.innerHTML = analysisLines.join('');
+  analysisBox.style.display = analysisLines.length > 0 ? 'block' : 'none';
+}
+
+function clearAll() {
+  document.getElementById('inputText').value = '';
+  document.getElementById('outputText').textContent = '번역 결과가 여기에 표시됩니다.';
+  document.getElementById('analysisBox').style.display = 'none';
+}
+
+// ===== 어휘 기능 =====
+function renderVocabCard(v) {
+  return `<div class="vocab-card">
+    <span class="vocab-card pos"><span class="badge badge-blue">${v.pos}</span></span>
+    <div class="vocab-card jasok">${v.jasok}</div>
+    <div class="vocab-card korean">${v.korean} <span style="color:#606880;font-size:0.8rem;">(${v.eng})</span></div>
+  </div>`;
+}
+
+function searchVocab() {
+  const q = document.getElementById('vocabInput').value.toLowerCase();
+  const results = VOCAB.filter(v =>
+    v.jasok.toLowerCase().includes(q) ||
+    v.korean.includes(q) ||
+    v.eng.toLowerCase().includes(q)
+  );
+  document.getElementById('vocabResults').innerHTML = results.map(renderVocabCard).join('');
+}
+
+function showAllVocab() {
+  document.getElementById('vocabAll').innerHTML = VOCAB.map(renderVocabCard).join('');
+}
+
+// ===== 탭 전환 =====
+function showTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelector(`#tab-${name}`).classList.add('active');
+  event.target.classList.add('active');
+  if (name === 'vocab') showAllVocab();
+}
+
+// 엔터키 번역
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('inputText').addEventListener('keydown', e => {
+    if (e.ctrlKey && e.key === 'Enter') translate();
+  });
+  showAllVocab();
+});
+</script>
+</body>
+</html>
