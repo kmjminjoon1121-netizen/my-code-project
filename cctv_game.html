@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>CCTV Monitor Game</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0a;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Courier New', monospace;
+    color: #00ff41;
+  }
+
+  h1 {
+    font-size: 14px;
+    letter-spacing: 4px;
+    color: #666;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+  }
+
+  #monitor-shell {
+    background: #1a1a1a;
+    border: 3px solid #333;
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: 0 0 40px rgba(0,255,65,0.08), inset 0 0 20px #000;
+  }
+
+  #screen-wrapper {
+    position: relative;
+    width: 560px;
+    height: 420px;
+    background: #000;
+    border: 2px solid #222;
+    overflow: hidden;
+    cursor: crosshair;
+  }
+
+  /* CRT scanlines overlay */
+  #screen-wrapper::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent 0px,
+      transparent 3px,
+      rgba(0,0,0,0.18) 3px,
+      rgba(0,0,0,0.18) 4px
+    );
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  #room-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  #static-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 5;
+  }
+
+  /* HUD overlay */
+  #hud {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 8;
+  }
+
+  #cam-label {
+    position: absolute;
+    top: 8px;
+    left: 10px;
+    font-size: 11px;
+    color: #00ff41;
+    text-shadow: 0 0 6px #00ff41;
+    letter-spacing: 2px;
+  }
+
+  #timestamp {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    font-size: 11px;
+    color: #00ff41;
+    text-shadow: 0 0 6px #00ff41;
+  }
+
+  #rec-dot {
+    position: absolute;
+    top: 26px;
+    left: 10px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    color: #ff3333;
+  }
+
+  #rec-dot span {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #ff3333;
+    box-shadow: 0 0 6px #ff3333;
+    animation: blink 1s infinite;
+  }
+
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.1} }
+
+  #alert-banner {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255,30,30,0.85);
+    color: #fff;
+    font-size: 15px;
+    letter-spacing: 3px;
+    padding: 10px 24px;
+    border: 2px solid #ff0000;
+    display: none;
+    animation: flashAlert 0.4s infinite alternate;
+    pointer-events: none;
+    z-index: 9;
+  }
+
+  @keyframes flashAlert { from{opacity:1} to{opacity:0.4} }
+
+  /* Controls */
+  #controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 12px;
+    width: 560px;
+  }
+
+  #cam-buttons {
+    display: flex;
+    gap: 6px;
+  }
+
+  .cam-btn {
+    background: #1c1c1c;
+    border: 1px solid #444;
+    color: #888;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    padding: 6px 12px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: all 0.15s;
+  }
+
+  .cam-btn:hover { border-color: #00ff41; color: #00ff41; }
+  .cam-btn.active { border-color: #00ff41; color: #00ff41; background: #0a1a0a; box-shadow: 0 0 8px rgba(0,255,65,0.3); }
+  .cam-btn.alert-cam { border-color: #ff3333 !important; color: #ff3333 !important; animation: blink 0.5s infinite; }
+
+  #stats {
+    display: flex;
+    gap: 20px;
+    font-size: 12px;
+    color: #666;
+  }
+
+  #stats span { color: #00ff41; }
+
+  /* Intruder element */
+  .intruder {
+    position: absolute;
+    width: 32px;
+    height: 52px;
+    cursor: crosshair;
+    z-index: 7;
+    pointer-events: all;
+    animation: intruderIdle 0.6s infinite alternate;
+  }
+
+  @keyframes intruderIdle {
+    from { transform: scaleY(1); }
+    to   { transform: scaleY(0.97) translateY(2px); }
+  }
+
+  /* Game over overlay */
+  #gameover {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.92);
+    z-index: 100;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+  }
+
+  #gameover h2 { font-size: 28px; color: #ff3333; letter-spacing: 6px; }
+  #gameover p { color: #888; font-size: 13px; letter-spacing: 2px; }
+  #gameover #final-score { font-size: 18px; color: #00ff41; }
+
+  #restart-btn {
+    margin-top: 10px;
+    background: transparent;
+    border: 2px solid #00ff41;
+    color: #00ff41;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    letter-spacing: 3px;
+    padding: 10px 28px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  #restart-btn:hover { background: #00ff41; color: #000; }
+
+  /* Start screen */
+  #startscreen {
+    display: flex;
+    position: fixed;
+    inset: 0;
+    background: #000;
+    z-index: 200;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+  }
+
+  #startscreen h2 { font-size: 22px; color: #00ff41; letter-spacing: 5px; text-shadow: 0 0 20px #00ff41; }
+  #startscreen p { color: #555; font-size: 12px; letter-spacing: 2px; line-height: 2; text-align: center; }
+
+  #start-btn {
+    margin-top: 16px;
+    background: transparent;
+    border: 2px solid #00ff41;
+    color: #00ff41;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    letter-spacing: 3px;
+    padding: 10px 30px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  #start-btn:hover { background: #00ff41; color: #000; }
+</style>
+</head>
+<body>
+
+<div id="startscreen">
+  <h2>[ SECURITY SYSTEM ]</h2>
+  <p>
+    4개의 카메라를 모니터링하세요<br>
+    침입자가 나타나면 클릭해서 제거<br>
+    놓치면 경보 발동 — 3회 실패시 종료<br>
+    카메라 전환 시 스태틱 발생
+  </p>
+  <button id="start-btn" onclick="startGame()">[ START MONITORING ]</button>
+</div>
+
+<div id="gameover">
+  <h2>[ SYSTEM BREACH ]</h2>
+  <p>침입자를 놓쳤습니다</p>
+  <div id="final-score"></div>
+  <button id="restart-btn" onclick="startGame()">[ RESTART ]</button>
+</div>
+
+<h1>[ Security Monitor v2.1 ]</h1>
+
+<div id="monitor-shell">
+  <div id="screen-wrapper">
+    <canvas id="room-canvas"></canvas>
+    <canvas id="static-canvas"></canvas>
+
+    <div id="hud">
+      <div id="cam-label">CAM-01 / ROOM A</div>
+      <div id="timestamp">00:00:00</div>
+      <div id="rec-dot"><span></span> REC</div>
+      <div id="alert-banner">! MOTION DETECTED !</div>
+    </div>
+  </div>
+
+  <div id="controls">
+    <div id="cam-buttons">
+      <button class="cam-btn active" onclick="switchCamera(0)">CAM 1</button>
+      <button class="cam-btn" onclick="switchCamera(1)">CAM 2</button>
+      <button class="cam-btn" onclick="switchCamera(2)">CAM 3</button>
+      <button class="cam-btn" onclick="switchCamera(3)">CAM 4</button>
+    </div>
+    <div id="stats">
+      SCORE: <span id="score-val">0</span> &nbsp;|&nbsp;
+      MISS: <span id="miss-val">0</span>/3 &nbsp;|&nbsp;
+      TIME: <span id="time-val">60</span>s
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Canvas setup ─────────────────────────────────────────
+const roomCanvas   = document.getElementById('room-canvas');
+const staticCanvas = document.getElementById('static-canvas');
+const rc = roomCanvas.getContext('2d');
+const sc = staticCanvas.getContext('2d');
+
+const W = 560, H = 420;
+roomCanvas.width = staticCanvas.width = W;
+roomCanvas.height = staticCanvas.height = H;
+
+// ── Room definitions ─────────────────────────────────────
+const ROOMS = [
+  { id: 0, name: 'CAM-01 / ROOM A', color: '#0d1a0d', tint: [20,60,20] },
+  { id: 1, name: 'CAM-02 / ROOM B', color: '#1a1200', tint: [60,50,10] },
+  { id: 2, name: 'CAM-03 / HALLWAY', color: '#0d0d1a', tint: [20,20,60] },
+  { id: 3, name: 'CAM-04 / STORAGE', color: '#1a0d0d', tint: [60,20,20] },
+];
+
+// Room layout objects (walls, furniture as simple shapes)
+const ROOM_LAYOUTS = [
+  // Room A - office
+  [ {t:'rect', x:0,   y:300, w:560, h:120, fill:'#0a160a'},
+    {t:'rect', x:60,  y:240, w:200, h:60,  fill:'#0c1f0c'},  // desk
+    {t:'rect', x:350, y:200, w:80,  h:100, fill:'#0c1f0c'},  // cabinet
+    {t:'rect', x:0,   y:0,   w:560, h:30,  fill:'#0a160a'},  // ceiling strip
+  ],
+  // Room B - warehouse
+  [ {t:'rect', x:0,   y:310, w:560, h:110, fill:'#160f00'},
+    {t:'rect', x:80,  y:220, w:60,  h:90,  fill:'#1a1200'},
+    {t:'rect', x:180, y:230, w:60,  h:80,  fill:'#1a1200'},
+    {t:'rect', x:380, y:180, w:100, h:130, fill:'#1a1200'},
+    {t:'rect', x:0,   y:0,   w:560, h:30,  fill:'#160f00'},
+  ],
+  // Hallway
+  [ {t:'rect', x:0,   y:320, w:560, h:100, fill:'#080820'},
+    {t:'rect', x:0,   y:0,   w:560, h:60,  fill:'#080820'},
+    {t:'rect', x:240, y:60,  w:80,  h:260, fill:'#0a0a28'},  // far wall
+  ],
+  // Storage
+  [ {t:'rect', x:0,   y:300, w:560, h:120, fill:'#160808'},
+    {t:'rect', x:30,  y:200, w:80,  h:100, fill:'#1a0d0d'},
+    {t:'rect', x:150, y:210, w:80,  h:90,  fill:'#1a0d0d'},
+    {t:'rect', x:400, y:190, w:120, h:110, fill:'#1a0d0d'},
+    {t:'rect', x:0,   y:0,   w:560, h:30,  fill:'#160808'},
+  ],
+];
+
+// ── Game state ────────────────────────────────────────────
+let currentCam = 0;
+let score = 0;
+let misses = 0;
+let timeLeft = 60;
+let gameActive = false;
+
+// Intruder state per camera
+let intruders = [null, null, null, null]; // {x,y,timer,el}
+
+// Static animation
+let staticActive = false;
+let staticFrame = 0;
+let staticTotalFrames = 18;
+let pendingCam = -1;
+let staticRAF = null;
+
+// Timers
+let clockInterval = null;
+let spawnInterval = null;
+let intruderTimers = [null, null, null, null];
+
+// ── Draw room ─────────────────────────────────────────────
+function drawRoom(camId) {
+  const room = ROOMS[camId];
+  const layout = ROOM_LAYOUTS[camId];
+  const [tr, tg, tb] = room.tint;
+
+  // Base fill
+  rc.fillStyle = room.color;
+  rc.fillRect(0, 0, W, H);
+
+  // Subtle grain background
+  const imgData = rc.getImageData(0, 0, W, H);
+  const d = imgData.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const g = (Math.random() * 18)|0;
+    d[i]   += g * (tr/60);
+    d[i+1] += g * (tg/60);
+    d[i+2] += g * (tb/60);
+  }
+  rc.putImageData(imgData, 0, 0);
+
+  // Layout objects
+  layout.forEach(o => {
+    rc.fillStyle = o.fill;
+    rc.fillRect(o.x, o.y, o.w, o.h);
+    // edge highlight
+    rc.strokeStyle = 'rgba(255,255,255,0.04)';
+    rc.lineWidth = 1;
+    rc.strokeRect(o.x, o.y, o.w, o.h);
+  });
+
+  // Vignette
+  const vg = rc.createRadialGradient(W/2, H/2, H*0.2, W/2, H/2, H*0.85);
+  vg.addColorStop(0, 'rgba(0,0,0,0)');
+  vg.addColorStop(1, 'rgba(0,0,0,0.65)');
+  rc.fillStyle = vg;
+  rc.fillRect(0, 0, W, H);
+
+  // Light flicker streak
+  rc.fillStyle = `rgba(255,255,255,${Math.random()*0.015})`;
+  rc.fillRect(0, (Math.random()*H)|0, W, 1);
+}
+
+// ── Static noise ──────────────────────────────────────────
+function drawStaticFrame(alpha) {
+  const imgData = sc.createImageData(W, H);
+  const d = imgData.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const v = (Math.random() * 255)|0;
+    d[i] = d[i+1] = d[i+2] = v;
+    d[i+3] = 255;
+  }
+  sc.putImageData(imgData, 0, 0);
+  staticCanvas.style.opacity = alpha;
+}
+
+function playStatic(onDone) {
+  staticActive = true;
+  staticFrame = 0;
+  hideAllIntruderEls();
+
+  function step() {
+    if (staticFrame < staticTotalFrames) {
+      let alpha;
+      if (staticFrame < staticTotalFrames * 0.3)       alpha = staticFrame / (staticTotalFrames * 0.3);
+      else if (staticFrame < staticTotalFrames * 0.7)  alpha = 1;
+      else alpha = 1 - (staticFrame - staticTotalFrames*0.7) / (staticTotalFrames*0.3);
+      drawStaticFrame(alpha);
+      staticFrame++;
+      staticRAF = requestAnimationFrame(step);
+    } else {
+      staticCanvas.style.opacity = 0;
+      staticActive = false;
+      onDone();
+    }
+  }
+  staticRAF = requestAnimationFrame(step);
+}
+
+// ── Camera switch ─────────────────────────────────────────
+function switchCamera(camId) {
+  if (!gameActive) return;
+  if (camId === currentCam || staticActive) return;
+
+  document.querySelectorAll('.cam-btn').forEach((b,i) => {
+    b.classList.toggle('active', i === camId);
+  });
+
+  playStatic(() => {
+    currentCam = camId;
+    document.getElementById('cam-label').textContent = ROOMS[camId].name;
+    drawRoom(camId);
+    showIntruderIfExists(camId);
+    updateAlertBanner();
+  });
+}
+
+// ── Intruder logic ────────────────────────────────────────
+function spawnIntruder() {
+  if (!gameActive) return;
+  // pick a random camera that has no intruder
+  const empty = [0,1,2,3].filter(i => intruders[i] === null);
+  if (empty.length === 0) return;
+  const camId = empty[(Math.random() * empty.length)|0];
+
+  const x = 80 + Math.random() * 360;
+  const y = 160 + Math.random() * 100;
+  const timeout = 4000 + Math.random() * 3000; // 4-7s to catch
+
+  const el = createIntruderEl(camId, x, y);
+  intruders[camId] = { x, y, el };
+
+  // Flash cam button
+  document.querySelectorAll('.cam-btn')[camId].classList.add('alert-cam');
+  updateAlertBanner();
+
+  if (currentCam === camId) {
+    document.getElementById('screen-wrapper').appendChild(el);
+  }
+
+  intruderTimers[camId] = setTimeout(() => {
+    if (intruders[camId]) {
+      // missed!
+      removeIntruder(camId, false);
+      recordMiss();
+    }
+  }, timeout);
+}
+
+function createIntruderEl(camId, x, y) {
+  const el = document.createElement('canvas');
+  el.width = 32;
+  el.height = 52;
+  el.className = 'intruder';
+  el.style.left = x + 'px';
+  el.style.top  = y + 'px';
+  drawIntruderOnCanvas(el, camId);
+  el.addEventListener('click', () => catchIntruder(camId));
+  return el;
+}
+
+function drawIntruderOnCanvas(el, camId) {
+  const ctx = el.getContext('2d');
+  const tint = ROOMS[camId].tint;
+  // dark silhouette with tint
+  const r = 20 + tint[0]*0.3;
+  const g = 20 + tint[1]*0.3;
+  const b = 20 + tint[2]*0.3;
+  ctx.fillStyle = `rgb(${r},${g},${b})`;
+
+  // head
+  ctx.beginPath();
+  ctx.arc(16, 10, 9, 0, Math.PI*2);
+  ctx.fill();
+
+  // body
+  ctx.fillRect(8, 18, 16, 20);
+
+  // legs
+  ctx.fillRect(8, 36, 7, 14);
+  ctx.fillRect(17, 36, 7, 14);
+
+  // eerie glow eyes
+  ctx.fillStyle = 'rgba(255,50,50,0.8)';
+  ctx.beginPath(); ctx.arc(12, 9, 2, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(20, 9, 2, 0, Math.PI*2); ctx.fill();
+
+  // noise overlay on figure
+  const imgData = ctx.getImageData(0, 0, 32, 52);
+  const d = imgData.data;
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i+3] > 0) {
+      const n = ((Math.random()-0.5)*30)|0;
+      d[i] = Math.max(0, Math.min(255, d[i]+n));
+      d[i+1] = Math.max(0, Math.min(255, d[i+1]+n));
+      d[i+2] = Math.max(0, Math.min(255, d[i+2]+n));
+    }
+  }
+  ctx.putImageData(imgData, 0, 0);
+}
+
+function catchIntruder(camId) {
+  if (!gameActive) return;
+  if (!intruders[camId]) return;
+  removeIntruder(camId, true);
+  score += 100;
+  document.getElementById('score-val').textContent = score;
+  // flash green
+  flashScreen('rgba(0,255,65,0.18)');
+}
+
+function removeIntruder(camId, caught) {
+  clearTimeout(intruderTimers[camId]);
+  intruderTimers[camId] = null;
+  if (intruders[camId] && intruders[camId].el.parentNode) {
+    intruders[camId].el.parentNode.removeChild(intruders[camId].el);
+  }
+  intruders[camId] = null;
+  document.querySelectorAll('.cam-btn')[camId].classList.remove('alert-cam');
+  updateAlertBanner();
+}
+
+function showIntruderIfExists(camId) {
+  if (intruders[camId]) {
+    const wrapper = document.getElementById('screen-wrapper');
+    if (!intruders[camId].el.parentNode) {
+      wrapper.appendChild(intruders[camId].el);
+    }
+  }
+}
+
+function hideAllIntruderEls() {
+  intruders.forEach(intr => {
+    if (intr && intr.el.parentNode) {
+      intr.el.parentNode.removeChild(intr.el);
+    }
+  });
+}
+
+function updateAlertBanner() {
+  const anyAlert = intruders.some(i => i !== null);
+  const banner = document.getElementById('alert-banner');
+  banner.style.display = (anyAlert && intruders[currentCam]) ? 'block' : 'none';
+}
+
+// ── Miss / flash ──────────────────────────────────────────
+function recordMiss() {
+  misses++;
+  document.getElementById('miss-val').textContent = misses;
+  flashScreen('rgba(255,0,0,0.3)');
+  if (misses >= 3) {
+    endGame();
+  }
+}
+
+function flashScreen(color) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `position:absolute;inset:0;background:${color};z-index:20;pointer-events:none;transition:opacity 0.4s`;
+  document.getElementById('screen-wrapper').appendChild(overlay);
+  setTimeout(() => { overlay.style.opacity = 0; }, 50);
+  setTimeout(() => overlay.parentNode && overlay.parentNode.removeChild(overlay), 500);
+}
+
+// ── Timestamp ─────────────────────────────────────────────
+function updateTimestamp() {
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2,'0');
+  const mm = String(now.getMinutes()).padStart(2,'0');
+  const ss = String(now.getSeconds()).padStart(2,'0');
+  document.getElementById('timestamp').textContent = `${hh}:${mm}:${ss}`;
+}
+
+// ── Room flicker loop ─────────────────────────────────────
+let flickerRAF;
+function flickerLoop() {
+  if (!gameActive) return;
+  // subtle re-draw flicker every ~40 frames
+  if (Math.random() < 0.025) drawRoom(currentCam);
+  flickerRAF = requestAnimationFrame(flickerLoop);
+}
+
+// ── Game start / end ──────────────────────────────────────
+function startGame() {
+  // Reset state
+  score = 0; misses = 0; timeLeft = 60; currentCam = 0;
+  intruders = [null,null,null,null];
+  intruderTimers.forEach(t => clearTimeout(t));
+  intruderTimers = [null,null,null,null];
+  gameActive = true;
+
+  document.getElementById('startscreen').style.display = 'none';
+  document.getElementById('gameover').style.display = 'none';
+  document.getElementById('score-val').textContent = 0;
+  document.getElementById('miss-val').textContent = 0;
+  document.getElementById('time-val').textContent = 60;
+  document.getElementById('alert-banner').style.display = 'none';
+  document.querySelectorAll('.cam-btn').forEach((b,i) => {
+    b.classList.toggle('active', i===0);
+    b.classList.remove('alert-cam');
+  });
+  document.getElementById('cam-label').textContent = ROOMS[0].name;
+
+  // Clear old intruder els
+  document.querySelectorAll('.intruder').forEach(e => e.remove());
+
+  drawRoom(0);
+  updateTimestamp();
+  flickerLoop();
+
+  // Clock
+  clearInterval(clockInterval);
+  clockInterval = setInterval(() => {
+    updateTimestamp();
+    timeLeft--;
+    document.getElementById('time-val').textContent = timeLeft;
+    if (timeLeft <= 0) endGame();
+  }, 1000);
+
+  // Spawn intruders
+  clearInterval(spawnInterval);
+  spawnInterval = setInterval(spawnIntruder, 3500);
+}
+
+function endGame() {
+  gameActive = false;
+  clearInterval(clockInterval);
+  clearInterval(spawnInterval);
+  cancelAnimationFrame(flickerRAF);
+  intruderTimers.forEach(t => clearTimeout(t));
+
+  document.getElementById('final-score').textContent = `FINAL SCORE: ${score}`;
+  document.getElementById('gameover').style.display = 'flex';
+}
+</script>
+</body>
+</html>
