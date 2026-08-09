@@ -1,28 +1,28 @@
-# HADAL
+# MAW
 
-A blind-navigation sonar game. You pilot a small submersible through pitch-black
-cave systems where nothing is visible until you ping it — and pinging near
-danger wakes it up.
+A bullet-hell boss fight against an abyssal anglerfish. Movement is the whole
+game — your submersible fires automatically, so all you have to do is not get
+hit by the only thing that can kill you: a tiny dot at the center of your hull.
 
 Open `index.html` in a browser to play. No build step, no dependencies.
 
 ## Controls
 
-- `W A S D` / arrow keys — thrust
-- `Space` — fire a sonar ping
+- `W A S D` / arrow keys — move
+- `Shift` — focus mode (slower, precise movement; shows your exact hit-radius)
+- `Space` — bomb (clears the screen, damages the boss, brief invincibility)
 
 ## The loop
 
-- The cave is invisible by default. Firing a ping sends an expanding wave that
-  briefly lights up rock, pearls, oxygen pods, and creatures it passes over —
-  the light fades a few seconds later, so you're navigating from memory as
-  much as sight.
-- Sonar energy recharges on its own; oxygen only drains, so oxygen pods are
-  the real bottleneck.
-- Things living in the dark are mostly asleep. A ping that reaches one wakes
-  it, and it will hunt toward you for a few seconds before settling back down.
-- Find the beacon to descend to the next depth (harder, tighter caves, more
-  woken things). Pearls are the score. Three hull hits and the run ends.
+- MAW cycles through attack patterns — ring bursts, aimed spreads, spirals,
+  homing spores, a telegraphed laser sweep. Every pattern's name is announced
+  a beat before it starts, so you always get a read before it gets dangerous.
+- Your hitbox is a small bright core, much smaller than your sprite — only
+  that core counts.
+- Stay under the boss to land your automatic fire; drift off to dodge. That's
+  the whole tension.
+- Beating a wave heals a bomb back and starts a tougher, faster MAW. Three
+  hits and the run ends; score comes from damage dealt and close grazes.
 
 Built as a single self-contained `index.html` — plain canvas + Web Audio,
 no external assets or fonts.
