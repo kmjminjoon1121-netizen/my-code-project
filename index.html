@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HADAL — navigate by sound alone</title>
+<style>
+  @font-face {
+    font-family: 'ui-mono-fallback';
+    src: local('IBM Plex Mono'), local('Consolas');
+  }
+  :root{
+    --ink:#c8ffd8;
+    --amber:#ffb545;
+    --amber-dim:#7a5a26;
+    --danger:#ff5d4a;
+    --hull:#141a17;
+    --hull-dark:#0a0d0b;
+    --glass:#03110c;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; height:100%;
+    background:#000;
+    background-image:
+      radial-gradient(ellipse at 50% 30%, #0e1512 0%, #050705 60%, #000 100%);
+    color:var(--ink);
+    font-family:'Courier New', ui-monospace, 'IBM Plex Mono', monospace;
+    overflow:hidden;
+    -webkit-font-smoothing:none;
+  }
+  #stage{
+    position:fixed; inset:0;
+    display:flex; align-items:center; justify-content:center;
+  }
+  #console{
+    position:relative;
+    background:
+      linear-gradient(155deg,#20261f 0%, #171c15 40%, #0e120e 100%);
+    padding:22px 22px 18px;
+    border-radius:6px;
+    box-shadow:
+      0 0 0 1px #05070550,
+      0 30px 60px -20px #000,
+      inset 0 1px 0 #ffffff14,
+      inset 0 -2px 0 #00000080;
+  }
+  .rivet{
+    position:absolute; width:9px; height:9px; border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #6b6b5c, #1c1c17 70%);
+    box-shadow:0 1px 1px #000a, inset 0 0 0 1px #00000060;
+  }
+  .rivet.tl{top:10px;left:10px;} .rivet.tr{top:10px;right:10px;}
+  .rivet.bl{bottom:10px;left:10px;} .rivet.br{bottom:10px;right:10px;}
+
+  #screenWrap{
+    position:relative;
+    border-radius:2px;
+    box-shadow: inset 0 0 40px 8px #000, inset 0 0 0 2px #000;
+    background:var(--glass);
+  }
+  canvas{
+    display:block;
+    image-rendering:pixelated;
+    filter: saturate(1.05);
+  }
+  #scanlines{
+    position:absolute; inset:0; pointer-events:none;
+    background:repeating-linear-gradient(
+      to bottom, rgba(0,0,0,0.16) 0px, rgba(0,0,0,0.16) 1px,
+      transparent 2px, transparent 3px
+    );
+    mix-blend-mode:multiply;
+  }
+  #vignette{
+    position:absolute; inset:0; pointer-events:none;
+    box-shadow: inset 0 0 120px 40px #000000cc;
+  }
+  #flash{
+    position:absolute; inset:0; pointer-events:none;
+    background:var(--danger); opacity:0; mix-blend-mode:screen;
+    transition:opacity .08s ease-out;
+  }
+
+  #hud{
+    position:absolute; left:0; right:0; top:0;
+    display:flex; justify-content:space-between;
+    padding:10px 14px;
+    font-size:11px; letter-spacing:2px;
+    text-transform:uppercase;
+    color:var(--amber);
+    text-shadow:0 0 6px #ffb54580;
+    pointer-events:none;
+  }
+  .hud-block{display:flex; flex-direction:column; gap:5px;}
+  .hud-label{color:var(--amber-dim); font-size:9px;}
+  .bar{
+    width:120px; height:7px; background:#00000080;
+    border:1px solid #ffb54540; position:relative;
+  }
+  .bar > i{ display:block; height:100%; background:linear-gradient(90deg,#ffb545,#ff8a3d); }
+  .bar.o2 > i{ background:linear-gradient(90deg,#3ddc9f,#8fffcf); }
+  .bar.o2.low > i{ background:linear-gradient(90deg,#ff5d4a,#ff9c4a); }
+  #lives{ display:flex; gap:4px; }
+  .life{ width:9px; height:9px; border:1px solid var(--amber); transform:rotate(45deg); }
+  .life.spent{ border-color:#5a4522; }
+
+  .overlay{
+    position:absolute; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    background:#00080570;
+    backdrop-filter: blur(1px);
+  }
+  .hidden{ display:none !important; }
+  .panel{
+    width:min(86%, 460px);
+    background:linear-gradient(160deg,#111611,#0a0d0a);
+    border:2px solid #2a3327;
+    box-shadow:0 0 0 1px #000, 0 20px 40px -10px #000a, inset 0 1px 0 #ffffff10;
+    padding:26px 24px 22px;
+    text-align:center;
+  }
+  h1.title{
+    margin:0 0 4px;
+    font-family:'Arial Narrow', Arial, sans-serif;
+    font-weight:900;
+    font-size:52px;
+    letter-spacing:10px;
+    color:var(--ink);
+    -webkit-text-stroke:1px #6effb2;
+    text-shadow: 0 0 18px #3dffa060, 0 0 2px #000;
+    clip-path: polygon(0 0,100% 0,100% 78%,97% 100%,0 100%);
+    transform:skewX(-3deg);
+  }
+  .tagline{
+    color:var(--amber-dim); font-size:11px; letter-spacing:3px;
+    margin-bottom:20px; text-transform:uppercase;
+  }
+  .rule{ color:#3a4a3d; font-size:11px; line-height:1.9; text-align:left; margin:16px 0; letter-spacing:.5px;}
+  .rule b{ color:var(--amber); }
+  .rule .k{
+    display:inline-block; min-width:20px; padding:0 5px; margin:0 2px;
+    border:1px solid #4a5a4a; border-bottom-width:3px; border-radius:2px;
+    font-size:10px; color:#cfe; text-align:center;
+  }
+  button.btn{
+    font-family:inherit; font-size:13px; letter-spacing:3px; text-transform:uppercase;
+    color:#0a1a10; background:linear-gradient(180deg,#7CFF9E,#3ddc9f);
+    border:none; border-bottom:4px solid #1b7a4e;
+    padding:13px 22px; cursor:pointer; margin-top:6px;
+    box-shadow:0 2px 0 #000;
+  }
+  button.btn:active{ transform:translateY(3px); border-bottom-width:1px; }
+  button.btn.danger{ background:linear-gradient(180deg,#ff8a7a,#ff5d4a); border-bottom-color:#8a2418; color:#280a06; }
+  .stat-row{ display:flex; justify-content:space-between; font-size:12px; letter-spacing:2px; margin:6px 0; color:#9fd; text-transform:uppercase; }
+  .stat-row b{ color:var(--amber); }
+  #transient{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    pointer-events:none; opacity:0; transition:opacity .25s;
+  }
+  #transient span{
+    font-size:22px; letter-spacing:6px; color:#7CFF9E; text-shadow:0 0 12px #3dffa0aa;
+  }
+  #hint{
+    position:absolute; bottom:10px; left:0; right:0; text-align:center;
+    font-size:10px; letter-spacing:2px; color:#3a4a3d; pointer-events:none;
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="console">
+    <div class="rivet tl"></div><div class="rivet tr"></div>
+    <div class="rivet bl"></div><div class="rivet br"></div>
+    <div id="screenWrap">
+      <canvas id="game" width="900" height="600"></canvas>
+      <div id="hud">
+        <div class="hud-block">
+          <span class="hud-label">depth</span>
+          <span id="depthVal">-18m</span>
+        </div>
+        <div class="hud-block" style="align-items:center;">
+          <span class="hud-label">sonar energy</span>
+          <div class="bar"><i id="energyBar" style="width:100%"></i></div>
+        </div>
+        <div class="hud-block" style="align-items:center;">
+          <span class="hud-label">oxygen</span>
+          <div class="bar o2"><i id="o2Bar" style="width:100%"></i></div>
+        </div>
+        <div class="hud-block" style="align-items:flex-end;">
+          <span class="hud-label">pearls</span>
+          <span id="pearlVal">0</span>
+        </div>
+        <div class="hud-block" style="align-items:flex-end;">
+          <span class="hud-label">hull</span>
+          <div id="lives"></div>
+        </div>
+      </div>
+      <div id="transient"><span id="transientText"></span></div>
+      <div id="flash"></div>
+      <div id="scanlines"></div>
+      <div id="vignette"></div>
+
+      <div class="overlay" id="startScreen">
+        <div class="panel">
+          <h1 class="title">HADAL</h1>
+          <div class="tagline">below the light. only echoes remain.</div>
+          <div class="rule">
+            당신은 낡은 심해정을 몰고 완전한 어둠 속을 내려갑니다.<br>
+            눈은 소용없습니다 — <b>PING</b>으로 주변을 비추고, 소리의 잔상이
+            사라지기 전에 길을 기억하세요. 핑은 근처의 것들을 <b>깨우기도</b> 합니다.
+          </div>
+          <div class="rule">
+            <span class="k">W A S D</span> / <span class="k">↑←↓→</span> 이동 &nbsp;·&nbsp;
+            <span class="k">SPACE</span> 핑 발사<br><br>
+            <b>목표</b> — 황금 비콘을 찾아 더 깊이 잠수하고, 진주를 모으세요.
+          </div>
+          <button class="btn" id="startBtn">◉ 하강 시작</button>
+        </div>
+      </div>
+
+      <div class="overlay hidden" id="deathScreen">
+        <div class="panel">
+          <h1 class="title" style="font-size:34px;color:#ffdcd6;-webkit-text-stroke-color:#ff8a7a;">HULL LOST</h1>
+          <div class="tagline" id="deathReason">contact with the dark</div>
+          <div class="stat-row"><span>도달 깊이</span><b id="statDepth">-18m</b></div>
+          <div class="stat-row"><span>수집한 진주</span><b id="statPearls">0</b></div>
+          <div class="stat-row"><span>최고 기록</span><b id="statBest">-18m</b></div>
+          <button class="btn danger" id="retryBtn">◉ 다시 잠수</button>
+        </div>
+      </div>
+
+      <div id="hint">SIGNAL DECAYS. TRUST THE ECHO, NOT THE SILENCE.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+// ---------- canvas / dpr setup ----------
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const LW = 900, LH = 600;
+function fitDPR(){
+  const dpr = Math.min(window.devicePixelRatio||1, 2);
+  canvas.width = LW*dpr; canvas.height = LH*dpr;
+  canvas.style.width = LW+'px'; canvas.style.height = LH+'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+fitDPR();
+
+// ---------- grid ----------
+const CELL = 15, COLS = 60, ROWS = 40;
+function idx(r,c){ return r*COLS+c; }
+
+// ---------- audio (procedural, no assets) ----------
+let actx = null;
+function audio(){ if(!actx){ try{ actx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return actx; }
+function blip(freq, dur, type, gainMax, delay){
+  const a = audio(); if(!a) return;
+  const t0 = a.currentTime + (delay||0);
+  const osc = a.createOscillator();
+  const g = a.createGain();
+  osc.type = type||'sine';
+  osc.frequency.setValueAtTime(freq, t0);
+  osc.frequency.exponentialRampToValueAtTime(Math.max(20,freq*0.4), t0+dur);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(gainMax||0.2, t0+0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
+  osc.connect(g).connect(a.destination);
+  osc.start(t0); osc.stop(t0+dur+0.02);
+}
+function sfxPing(){ blip(180,1.1,'sine',0.16); blip(720,0.25,'sine',0.05,0.03); }
+function sfxBump(){ blip(90,0.25,'square',0.12); }
+function sfxHurt(){ blip(140,0.5,'sawtooth',0.18); }
+function sfxPickup(){ blip(880,0.18,'triangle',0.12); blip(1320,0.14,'triangle',0.08,0.05); }
+function sfxDescend(){ blip(220,0.9,'sine',0.15); blip(110,1.2,'sine',0.1,0.15); }
+
+// ---------- rng (deterministic per-level) ----------
+function makeRng(seed){
+  let s = seed>>>0;
+  return function(){
+    s ^= s<<13; s>>>=0; s ^= s>>>17; s ^= s<<5; s>>>=0;
+    return (s>>>0) / 4294967296;
+  };
+}
+function hash2(r,c,seed){
+  let h = Math.sin(r*127.1 + c*311.7 + seed*74.3) * 43758.5453;
+  return h - Math.floor(h);
+}
+
+// ---------- level generation ----------
+let depth = 1;
+let seed = 1337;
+let open, dist, exitCell, startCell;
+let pearls, orbs, eels;
+let level = {};
+
+function generateLevel(){
+  seed = (seed*2654435761 + depth*97) >>> 0;
+  const rng = makeRng(seed + depth*911);
+  open = new Uint8Array(COLS*ROWS);
+  startCell = { r: (ROWS/2)|0, c: 3 };
+  open[idx(startCell.r,startCell.c)] = 1;
+
+  const targetRatio = Math.max(0.20, 0.30 - depth*0.006);
+  const targetOpen = Math.floor(COLS*ROWS*targetRatio);
+  let openCount = 1;
+  const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+  let walkers = [{ r:startCell.r, c:startCell.c, d: dirs[(rng()*4)|0] }];
+  const maxWalkers = Math.min(8, 4 + Math.floor(depth/3));
+  let steps = 0;
+
+  function tryOpen(r,c){
+    if(r<2||r>ROWS-3||c<2||c>COLS-3) return false;
+    if(!open[idx(r,c)]){ open[idx(r,c)]=1; openCount++; }
+    return true;
+  }
+
+  while(openCount < targetOpen && steps < 40000){
+    steps++;
+    for(const w of walkers){
+      if(rng() > 0.72){
+        w.d = dirs[(rng()*4)|0];
+      }
+      const nr = w.r + w.d[0], nc = w.c + w.d[1];
+      if(nr<2||nr>ROWS-3||nc<2||nc>COLS-3){
+        w.d = dirs[(rng()*4)|0];
+        continue;
+      }
+      w.r = nr; w.c = nc;
+      tryOpen(w.r,w.c);
+      if(rng() > 0.985 && rng() < 0.55) tryOpen(w.r+w.d[1], w.c+w.d[0]);
+      if(walkers.length < maxWalkers && rng() > 0.995){
+        walkers.push({ r:w.r, c:w.c, d: dirs[(rng()*4)|0] });
+      }
+    }
+    if(openCount >= targetOpen) break;
+  }
+
+  // BFS from start
+  dist = new Int16Array(COLS*ROWS).fill(-1);
+  dist[idx(startCell.r,startCell.c)] = 0;
+  const q = [startCell];
+  let qi = 0;
+  let far = startCell, farDist = 0;
+  while(qi < q.length){
+    const cur = q[qi++];
+    const d0 = dist[idx(cur.r,cur.c)];
+    if(d0 > farDist){ farDist = d0; far = cur; }
+    for(const [dr,dc] of dirs){
+      const nr=cur.r+dr, nc=cur.c+dc;
+      if(nr<0||nr>=ROWS||nc<0||nc>=COLS) continue;
+      if(!open[idx(nr,nc)]) continue;
+      if(dist[idx(nr,nc)] !== -1) continue;
+      dist[idx(nr,nc)] = d0+1;
+      q.push({r:nr,c:nc});
+    }
+  }
+  exitCell = far;
+
+  // scatter items on open cells sorted by reachable distance
+  const candidates = q.filter(cell => dist[idx(cell.r,cell.c)] > 6);
+  function shuffle(arr){
+    for(let i=arr.length-1;i>0;i--){
+      const j = (rng()*(i+1))|0;
+      [arr[i],arr[j]] = [arr[j],arr[i]];
+    }
+    return arr;
+  }
+  shuffle(candidates);
+  const used = new Set();
+  used.add(idx(exitCell.r,exitCell.c));
+
+  pearls = [];
+  const pearlCount = 6 + Math.floor(depth/2);
+  for(let i=0;i<candidates.length && pearls.length<pearlCount;i++){
+    const cell = candidates[i];
+    const k = idx(cell.r,cell.c);
+    if(used.has(k)) continue;
+    used.add(k);
+    pearls.push({ x:(cell.c+0.5)*CELL, y:(cell.r+0.5)*CELL, r:3.5, alpha:0, taken:false });
+  }
+  orbs = [];
+  const orbCount = 3 + Math.floor(depth/4);
+  for(let i=0;i<candidates.length && orbs.length<orbCount;i++){
+    const cell = candidates[candidates.length-1-i];
+    const k = idx(cell.r,cell.c);
+    if(used.has(k)) continue;
+    used.add(k);
+    orbs.push({ x:(cell.c+0.5)*CELL, y:(cell.r+0.5)*CELL, r:5, alpha:0, taken:false });
+  }
+  eels = [];
+  const eelCount = Math.min(9, 2 + Math.floor(depth*0.9));
+  const eelCandidates = candidates.filter(cell => dist[idx(cell.r,cell.c)] > 14);
+  for(let i=0;i<eelCandidates.length && eels.length<eelCount;i++){
+    const cell = eelCandidates[i];
+    const k = idx(cell.r,cell.c);
+    if(used.has(k)) continue;
+    used.add(k);
+    const ang = rng()*Math.PI*2;
+    eels.push({
+      x:(cell.c+0.5)*CELL, y:(cell.r+0.5)*CELL,
+      vx:Math.cos(ang)*14, vy:Math.sin(ang)*14,
+      alpha:0, alerted:0, phase:rng()*10, len: 5+((rng()*3)|0),
+      wanderT: rng()*3
+    });
+  }
+
+  level.revealCells = new Float32Array(COLS*ROWS);
+  level.exitAlpha = 0;
+  level.styleSeed = seed;
+}
+
+// ---------- player ----------
+const player = {
+  x:0, y:0, vx:0, vy:0, angle:0, radius:6.5,
+  invuln:0
+};
+function resetPlayerToStart(){
+  player.x = (startCell.c+0.5)*CELL;
+  player.y = (startCell.r+0.5)*CELL;
+  player.vx = 0; player.vy = 0;
+}
+
+// ---------- game state ----------
+let state = 'start'; // start | playing | transition | dead
+let lives = 3, maxLives = 3;
+let oxygen = 100, maxOxygen = 100;
+let energy = 100, maxEnergy = 100;
+let score = 0;
+let pings = [];
+let transitionT = 0;
+let shake = 0;
+let flashT = 0;
+let deathReason = '';
+
+const keys = {};
+window.addEventListener('keydown', e=>{
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
+  const wasDown = keys[e.key];
+  keys[e.key] = true;
+  if(e.key === ' ' && !wasDown && state === 'playing') firePing();
+});
+window.addEventListener('keyup', e=>{ keys[e.key] = false; });
+
+function firePing(){
+  if(energy < 22) return;
+  energy -= 22;
+  pings.push({ x:player.x, y:player.y, r:0, speed:280, max: 620 });
+  sfxPing();
+}
+
+function startRun(){
+  depth = 1; seed = (Math.random()*1e9)|0;
+  lives = maxLives; oxygen = maxOxygen; energy = maxEnergy; score = 0;
+  pings = [];
+  generateLevel();
+  resetPlayerToStart();
+  player.invuln = 1.2;
+  state = 'playing';
+  document.getElementById('startScreen').classList.add('hidden');
+  document.getElementById('deathScreen').classList.add('hidden');
+  audio();
+}
+
+function nextLevel(){
+  depth += 1;
+  generateLevel();
+  resetPlayerToStart();
+  player.invuln = 1.2;
+  oxygen = Math.min(maxOxygen, oxygen + 40);
+  energy = maxEnergy;
+  showTransient('— ' + (depth*18) + 'M —');
+  sfxDescend();
+}
+
+function showTransient(text){
+  const el = document.getElementById('transient');
+  document.getElementById('transientText').textContent = text;
+  el.style.opacity = '1';
+  setTimeout(()=>{ el.style.opacity='0'; }, 1100);
+}
+
+function loseLife(reason){
+  if(player.invuln > 0) return;
+  lives -= 1;
+  flashT = 1;
+  shake = 10;
+  sfxHurt();
+  oxygen = Math.min(maxOxygen, Math.max(oxygen, 55));
+  if(lives <= 0){
+    endRun(reason);
+  } else {
+    resetPlayerToStart();
+    player.invuln = 2.2;
+  }
+}
+
+function endRun(reason){
+  state = 'dead';
+  deathReason = reason;
+  const bestKey = 'hadal_best_depth';
+  const best = parseInt(localStorage.getItem(bestKey)||'0',10);
+  const reached = depth*18;
+  if(reached > best) localStorage.setItem(bestKey, String(reached));
+  document.getElementById('deathReason').textContent = reason;
+  document.getElementById('statDepth').textContent = '-'+reached+'m';
+  document.getElementById('statPearls').textContent = score;
+  document.getElementById('statBest').textContent = '-'+Math.max(best,reached)+'m';
+  document.getElementById('deathScreen').classList.remove('hidden');
+}
+
+document.getElementById('startBtn').addEventListener('click', startRun);
+document.getElementById('retryBtn').addEventListener('click', startRun);
+
+// ---------- collision helpers ----------
+function isSolid(px, py){
+  const c = Math.floor(px/CELL), r = Math.floor(py/CELL);
+  if(r<0||r>=ROWS||c<0||c>=COLS) return true;
+  return !open[idx(r,c)];
+}
+function moveWithCollision(obj, dx, dy, radius, onBump){
+  const steps = ['x','y'];
+  let bumped = false;
+  const nx = obj.x + dx;
+  if(!isSolid(nx-radius,obj.y) && !isSolid(nx+radius,obj.y)){
+    obj.x = nx;
+  } else { bumped = true; if(steps.includes('x')) {} }
+  const ny = obj.y + dy;
+  if(!isSolid(obj.x,ny-radius) && !isSolid(obj.x,ny+radius)){
+    obj.y = ny;
+  } else { bumped = true; }
+  if(bumped && onBump) onBump();
+  return bumped;
+}
+
+// ---------- update ----------
+let last = performance.now();
+function update(dt){
+  dt = Math.min(dt, 1/30);
+
+  if(state === 'playing'){
+    // input
+    let ax=0, ay=0;
+    if(keys['ArrowUp']||keys['w']||keys['W']) ay -= 1;
+    if(keys['ArrowDown']||keys['s']||keys['S']) ay += 1;
+    if(keys['ArrowLeft']||keys['a']||keys['A']) ax -= 1;
+    if(keys['ArrowRight']||keys['d']||keys['D']) ax += 1;
+    const mag = Math.hypot(ax,ay)||1;
+    const ACCEL = 480;
+    player.vx += (ax/mag)*ACCEL*dt;
+    player.vy += (ay/mag)*ACCEL*dt;
+    const drag = 3.0;
+    player.vx *= Math.max(0, 1-drag*dt);
+    player.vy *= Math.max(0, 1-drag*dt);
+    const speed = Math.hypot(player.vx,player.vy);
+    const MAXSPD = 155;
+    if(speed > MAXSPD){ player.vx *= MAXSPD/speed; player.vy *= MAXSPD/speed; }
+    if(speed > 8) player.angle = Math.atan2(player.vy,player.vx);
+
+    let bumped = false;
+    moveWithCollision(player, player.vx*dt, player.vy*dt, player.radius, ()=>{ bumped = true; });
+    if(bumped){
+      player.vx *= -0.35; player.vy *= -0.35;
+      if(player.invuln<=0){ oxygen = Math.max(0, oxygen-4); sfxBump(); shake = Math.max(shake,4); }
+    }
+
+    if(player.invuln > 0) player.invuln -= dt;
+
+    // oxygen drain
+    const drain = 1.6 + depth*0.12;
+    oxygen -= drain*dt;
+    if(oxygen <= 0){ oxygen = 0; loseLife('OXYGEN DEPLETED'); }
+
+    // energy regen
+    energy = Math.min(maxEnergy, energy + 9*dt);
+
+    // pings
+    for(const p of pings){ p.r += p.speed*dt; }
+    pings = pings.filter(p => p.r < p.max);
+
+    // reveal grid cells near any ping band, plus small ambient near-field
+    const band = 34;
+    for(const p of pings){
+      const minC = Math.max(0, Math.floor((p.x-p.r-band)/CELL));
+      const maxC = Math.min(COLS-1, Math.floor((p.x+p.r+band)/CELL));
+      const minR = Math.max(0, Math.floor((p.y-p.r-band)/CELL));
+      const maxR = Math.min(ROWS-1, Math.floor((p.y+p.r+band)/CELL));
+      for(let r=minR;r<=maxR;r++){
+        for(let c=minC;c<=maxC;c++){
+          if(!open[idx(r,c)]){
+            const cx=(c+0.5)*CELL, cy=(r+0.5)*CELL;
+            const d = Math.hypot(cx-p.x, cy-p.y);
+            if(Math.abs(d-p.r) < band){
+              const k = idx(r,c);
+              level.revealCells[k] = Math.max(level.revealCells[k], 1 - Math.abs(d-p.r)/band);
+            }
+          }
+        }
+      }
+    }
+    for(let i=0;i<level.revealCells.length;i++){
+      if(level.revealCells[i] > 0) level.revealCells[i] = Math.max(0, level.revealCells[i] - dt*0.35);
+    }
+    // ambient near-field dim reveal (decay fast so it doesn't linger as "seen")
+    {
+      const rad = 2;
+      const pc = Math.floor(player.x/CELL), pr = Math.floor(player.y/CELL);
+      for(let r=pr-rad;r<=pr+rad;r++){
+        for(let c=pc-rad;c<=pc+rad;c++){
+          if(r<0||r>=ROWS||c<0||c>=COLS) continue;
+          if(!open[idx(r,c)]){
+            const d = Math.hypot(c-pc,r-pr);
+            if(d < rad+0.6){
+              const k=idx(r,c);
+              level.revealCells[k] = Math.max(level.revealCells[k], 0.22*(1-d/(rad+0.6)));
+            }
+          }
+        }
+      }
+    }
+
+    // reveal items via ping
+    function pingReveal(obj){
+      for(const p of pings){
+        const d = Math.hypot(obj.x-p.x, obj.y-p.y);
+        if(Math.abs(d-p.r) < band) obj.alpha = 1;
+      }
+      const dPlayer = Math.hypot(obj.x-player.x, obj.y-player.y);
+      if(dPlayer < 60) obj.alpha = Math.max(obj.alpha, 0.5*(1-dPlayer/60));
+      obj.alpha = Math.max(0, obj.alpha - dt*0.5);
+    }
+    for(const p of pearls) if(!p.taken) pingReveal(p);
+    for(const o of orbs) if(!o.taken) pingReveal(o);
+    pingReveal({x:(exitCell.c+0.5)*CELL, y:(exitCell.r+0.5)*CELL, get alpha(){return level.exitAlpha;}, set alpha(v){level.exitAlpha=v;}});
+
+    // pearl/orb pickup
+    for(const p of pearls){
+      if(p.taken) continue;
+      if(Math.hypot(p.x-player.x,p.y-player.y) < player.radius+p.r+2){
+        p.taken = true; score += 10; sfxPickup();
+      }
+    }
+    for(const o of orbs){
+      if(o.taken) continue;
+      if(Math.hypot(o.x-player.x,o.y-player.y) < player.radius+o.r+2){
+        o.taken = true; oxygen = Math.min(maxOxygen, oxygen+34); sfxPickup();
+      }
+    }
+
+    // exit check
+    {
+      const ex = (exitCell.c+0.5)*CELL, ey=(exitCell.r+0.5)*CELL;
+      if(Math.hypot(ex-player.x, ey-player.y) < player.radius+9){
+        nextLevel();
+      }
+    }
+
+    // eels
+    for(const eel of eels){
+      // alert if a ping passed near
+      for(const p of pings){
+        const d = Math.hypot(eel.x-p.x, eel.y-p.y);
+        if(Math.abs(d-p.r) < band && eel.alerted <= 0){
+          eel.alerted = 3.2 + Math.random()*1.2;
+        }
+      }
+      pingReveal(eel);
+      let tx, ty;
+      if(eel.alerted > 0){
+        eel.alerted -= dt;
+        const dx = player.x-eel.x, dy = player.y-eel.y;
+        const dd = Math.hypot(dx,dy)||1;
+        tx = dx/dd; ty = dy/dd;
+        const spd = 46;
+        eel.vx += tx*spd*dt*2.2; eel.vy += ty*spd*dt*2.2;
+      } else {
+        eel.wanderT -= dt;
+        if(eel.wanderT <= 0){
+          const ang = Math.random()*Math.PI*2;
+          eel.vx = Math.cos(ang)*16; eel.vy = Math.sin(ang)*16;
+          eel.wanderT = 1.5 + Math.random()*2.5;
+        }
+      }
+      const espeed = Math.hypot(eel.vx,eel.vy);
+      const emax = eel.alerted>0 ? 58 : 20;
+      if(espeed > emax){ eel.vx *= emax/espeed; eel.vy *= emax/espeed; }
+      eel.vx *= Math.max(0,1-2.0*dt);
+      eel.vy *= Math.max(0,1-2.0*dt);
+      moveWithCollision(eel, eel.vx*dt, eel.vy*dt, 4, ()=>{
+        eel.vx *= -1; eel.vy *= -1;
+      });
+      eel.phase += dt*6;
+
+      const dHit = Math.hypot(eel.x-player.x, eel.y-player.y);
+      if(dHit < player.radius+5 && player.invuln<=0){
+        loseLife('CONTACT — SOMETHING IN THE DARK');
+      }
+    }
+
+    if(shake > 0) shake = Math.max(0, shake - dt*30);
+    if(flashT > 0) flashT = Math.max(0, flashT - dt*3);
+  }
+
+  // HUD
+  document.getElementById('depthVal').textContent = '-'+(depth*18)+'m';
+  document.getElementById('energyBar').style.width = Math.max(0,energy)+'%';
+  const o2bar = document.getElementById('o2Bar');
+  o2bar.style.width = Math.max(0,oxygen)+'%';
+  o2bar.parentElement.classList.toggle('low', oxygen < 30);
+  document.getElementById('pearlVal').textContent = score;
+  const livesEl = document.getElementById('lives');
+  livesEl.innerHTML = '';
+  for(let i=0;i<maxLives;i++){
+    const d = document.createElement('div');
+    d.className = 'life' + (i>=lives?' spent':'');
+    livesEl.appendChild(d);
+  }
+  document.getElementById('flash').style.opacity = (flashT*0.35).toFixed(2);
+}
+
+// ---------- render ----------
+function rockColor(r,c,alpha){
+  const h = hash2(r,c,level.styleSeed);
+  const warm = h > 0.55;
+  const base = warm ? [120,78,42] : [58,74,66];
+  return `rgba(${base[0]},${base[1]},${base[2]},${alpha})`;
+}
+
+function drawSub(x,y,angle,vx,vy,invuln){
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.rotate(angle);
+  const flicker = invuln>0 ? (Math.sin(performance.now()/60)>0?1:0.25) : 1;
+  ctx.globalAlpha = flicker;
+  ctx.shadowColor = '#7CFF9E';
+  ctx.shadowBlur = 14;
+  ctx.fillStyle = '#bdfff0';
+  ctx.strokeStyle = '#3ddc9f';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(9,0);
+  ctx.lineTo(-6,5);
+  ctx.lineTo(-3,0);
+  ctx.lineTo(-6,-5);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.restore();
+
+  const speed = Math.hypot(vx,vy);
+  if(speed > 6){
+    ctx.save();
+    ctx.globalAlpha = Math.min(0.5, speed/200);
+    ctx.strokeStyle = '#3ddc9f';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x,y);
+    ctx.lineTo(x-vx*0.12, y-vy*0.12);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function drawEel(eel){
+  if(eel.alpha <= 0.01) return;
+  ctx.save();
+  ctx.globalAlpha = eel.alpha;
+  const col = eel.alerted>0 ? '#ff6b4a' : '#c98a4a';
+  ctx.strokeStyle = col;
+  ctx.shadowColor = col;
+  ctx.shadowBlur = eel.alerted>0 ? 10 : 4;
+  ctx.lineWidth = 2.4;
+  ctx.beginPath();
+  const dir = Math.atan2(eel.vy,eel.vx) || 0;
+  for(let i=0;i<eel.len;i++){
+    const t = i/(eel.len-1);
+    const off = Math.sin(eel.phase + i*1.1) * 4;
+    const bx = eel.x - Math.cos(dir)*i*4;
+    const by = eel.y - Math.sin(dir)*i*4;
+    const px = bx - Math.sin(dir)*off;
+    const py = by + Math.cos(dir)*off;
+    if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+const particles = [];
+for(let i=0;i<70;i++){
+  particles.push({ x:Math.random()*LW, y:Math.random()*LH, vx:(Math.random()-0.5)*4, vy:(Math.random()-0.5)*4, r:Math.random()*1.2+0.3 });
+}
+
+function render(dt){
+  ctx.save();
+  if(shake>0){
+    ctx.translate((Math.random()-0.5)*shake, (Math.random()-0.5)*shake);
+  }
+  ctx.fillStyle = '#020a07';
+  ctx.fillRect(-20,-20,LW+40,LH+40);
+
+  // ambient particles (plankton drift)
+  ctx.fillStyle = 'rgba(140,200,180,0.5)';
+  for(const pt of particles){
+    pt.x += pt.vx*dt; pt.y += pt.vy*dt;
+    if(pt.x<0) pt.x+=LW; if(pt.x>LW) pt.x-=LW;
+    if(pt.y<0) pt.y+=LH; if(pt.y>LH) pt.y-=LH;
+    ctx.globalAlpha = 0.25;
+    ctx.beginPath(); ctx.arc(pt.x,pt.y,pt.r,0,7); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  if(state !== 'start'){
+    // revealed rock cells
+    for(let r=0;r<ROWS;r++){
+      for(let c=0;c<COLS;c++){
+        const k = idx(r,c);
+        if(open[k]) continue;
+        const a = level.revealCells[k];
+        if(a <= 0.01) continue;
+        const x = c*CELL, y = r*CELL;
+        ctx.fillStyle = rockColor(r,c,Math.min(1,a));
+        ctx.fillRect(x,y,CELL,CELL);
+        const h = hash2(r,c,level.styleSeed+7);
+        ctx.fillStyle = `rgba(0,0,0,${0.25*a})`;
+        ctx.fillRect(x+2+h*4, y+2+((h*13)%4), 4, 4);
+      }
+    }
+
+    // exit beacon
+    if(level.exitAlpha > 0.01){
+      const ex=(exitCell.c+0.5)*CELL, ey=(exitCell.r+0.5)*CELL;
+      ctx.save();
+      ctx.globalAlpha = level.exitAlpha;
+      const pulse = 8 + Math.sin(performance.now()/220)*3;
+      ctx.strokeStyle = '#ffd76a';
+      ctx.shadowColor = '#ffd76a';
+      ctx.shadowBlur = 16;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(ex,ey,pulse,0,7); ctx.stroke();
+      ctx.beginPath(); ctx.arc(ex,ey,pulse*0.4,0,7); ctx.stroke();
+      ctx.restore();
+    }
+
+    // pearls
+    for(const p of pearls){
+      if(p.taken || p.alpha<=0.01) continue;
+      ctx.save();
+      ctx.globalAlpha = p.alpha;
+      ctx.fillStyle = '#fff2cf';
+      ctx.shadowColor = '#fff2cf'; ctx.shadowBlur = 8;
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,7); ctx.fill();
+      ctx.restore();
+    }
+    // orbs
+    for(const o of orbs){
+      if(o.taken || o.alpha<=0.01) continue;
+      ctx.save();
+      ctx.globalAlpha = o.alpha;
+      ctx.strokeStyle = '#8fffcf'; ctx.shadowColor='#8fffcf'; ctx.shadowBlur=8;
+      ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.arc(o.x,o.y,o.r,0,7); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(o.x-3,o.y); ctx.lineTo(o.x+3,o.y);
+      ctx.moveTo(o.x,o.y-3); ctx.lineTo(o.x,o.y+3); ctx.stroke();
+      ctx.restore();
+    }
+    for(const eel of eels) drawEel(eel);
+
+    // ping rings
+    for(const p of pings){
+      const a = Math.max(0, 1 - p.r/p.max);
+      ctx.save();
+      ctx.globalAlpha = a*0.9;
+      ctx.strokeStyle = '#7CFF9E';
+      ctx.shadowColor = '#7CFF9E'; ctx.shadowBlur = 10;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,7); ctx.stroke();
+      ctx.restore();
+    }
+
+    drawSub(player.x, player.y, player.angle, player.vx, player.vy, player.invuln);
+  }
+
+  ctx.restore();
+}
+
+// ---------- main loop ----------
+function loop(now){
+  const dt = (now-last)/1000; last = now;
+  update(dt);
+  render(dt);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+})();
+</script>
+</body>
+</html>
