@@ -56,11 +56,12 @@
       // ---- state ----
       this.score = 0;
       this.life = 5;
-      this.carrying = null; // 'red' | 'blue' | 'defective' | null
+      this.carriedItem = null; // the actual item GameObject currently held, or null
       this.invulnerableUntil = 0;
       this.gameOver = false;
       this.lastItemSpawn = 0;
       this.itemSpawnInterval = 1100;
+      this.grabRadius = 26;
 
       // ---- background zones ----
       this.add.rectangle(WIDTH / 2, 20, WIDTH, 40, 0x1c1c26);
@@ -105,9 +106,6 @@
       this.physics.add.existing(this.player);
       this.player.body.setCircle(16);
 
-      this.carryIndicator = this.add.circle(this.player.x, this.player.y - 26, 8, 0xffffff)
-        .setVisible(false).setStrokeStyle(2, 0x222222).setDepth(16);
-
       // ---- groups ----
       this.bullets = this.physics.add.group();
       this.items = this.physics.add.group();
@@ -133,7 +131,7 @@
         fontSize: '20px', color: '#ff8888', fontFamily: 'Arial'
       }).setDepth(20);
 
-      this.add.text(WIDTH / 2, 12, '마우스로 이동 | 탄막 피하기 | 물건을 옮겨 상자/소각로에 배달', {
+      this.add.text(WIDTH / 2, 12, '마우스 이동 · 탄막 피하기 | 물건 클릭해서 잡고 상자/소각로로 드래그', {
         fontSize: '13px', color: '#aaaaaa', fontFamily: 'Arial'
       }).setOrigin(0.5, 0).setDepth(20);
 
@@ -143,14 +141,36 @@
 
       // ---- collisions ----
       this.physics.add.overlap(this.player, this.bullets, this.hitBullet, null, this);
-      this.physics.add.overlap(this.player, this.items, this.hitItem, null, this);
 
       this.input.keyboard.on('keydown-R', () => {
         if (this.gameOver) this.scene.restart();
       });
-      this.input.on('pointerdown', () => {
-        if (this.gameOver) this.scene.restart();
+      this.input.on('pointerdown', (pointer) => {
+        if (this.gameOver) {
+          this.scene.restart();
+          return;
+        }
+        this.tryGrabItem(pointer);
       });
+    }
+
+    tryGrabItem(pointer) {
+      if (this.carriedItem) return;
+      let closest = null;
+      let closestDist = this.grabRadius;
+      this.items.getChildren().forEach((item) => {
+        const d = Phaser.Math.Distance.Between(pointer.x, pointer.y, item.x, item.y);
+        if (d < closestDist) {
+          closest = item;
+          closestDist = d;
+        }
+      });
+      if (closest) {
+        this.carriedItem = closest;
+        this.carriedItem.body.setVelocity(0, 0);
+        this.carriedItem.setDepth(16);
+        this.carriedItem.setStrokeStyle(3, 0xffffff);
+      }
     }
 
     drawBelt(offset) {
@@ -171,7 +191,7 @@
       const y = BELT_Y_TOP + (BELT_Y_BOTTOM - BELT_Y_TOP) / 2;
       let item;
       if (type === 'defective') {
-        item = this.add.circle(ITEM_SPAWN_X, y, 13, 0x2b2b2b);
+        item = this.add.circle(ITEM_SPAWN_X, y, 14, 0x2b2b2b);
         item.setStrokeStyle(3, 0xff2222);
       } else {
         item = this.add.circle(ITEM_SPAWN_X, y, 14, type === 'red' ? 0xff3333 : 0x3333ff);
@@ -180,8 +200,8 @@
       this.physics.add.existing(item);
       item.body.setCircle(14);
       item.itemType = type;
-      item.body.setVelocityX(45 + Math.random() * 25);
       this.items.add(item);
+      item.body.setVelocityX(45 + Math.random() * 25);
     }
 
     spawnEnemyBullet(enemy) {
@@ -191,9 +211,9 @@
         b.setStrokeStyle(2, 0xffffff);
         this.physics.add.existing(b);
         b.body.setCircle(8);
+        this.bullets.add(b);
         const speed = 190;
         b.body.setVelocity(Math.sin(a) * speed, Math.cos(a) * speed);
-        this.bullets.add(b);
       });
     }
 
@@ -210,28 +230,17 @@
       }
     }
 
-    hitItem(playerObj, item) {
-      if (this.carrying || this.gameOver) return;
-      this.carrying = item.itemType;
-      if (item.itemType === 'defective') {
-        this.carryIndicator.setFillStyle(0x2b2b2b).setStrokeStyle(2, 0xff2222);
-      } else {
-        this.carryIndicator.setFillStyle(item.itemType === 'red' ? 0xff3333 : 0x3333ff).setStrokeStyle(2, 0x222222);
-      }
-      this.carryIndicator.setVisible(true);
-      item.destroy();
-    }
-
     checkDelivery() {
-      if (!this.carrying || this.gameOver) return;
+      if (!this.carriedItem || this.gameOver) return;
       const px = this.player.x, py = this.player.y;
       const inRed = px > RED_BOX.x && px < RED_BOX.x + RED_BOX.w && py > RED_BOX.y && py < RED_BOX.y + RED_BOX.h;
       const inBlue = px > BLUE_BOX.x && px < BLUE_BOX.x + BLUE_BOX.w && py > BLUE_BOX.y && py < BLUE_BOX.y + BLUE_BOX.h;
       const inIncin = px > INCINERATOR.x && px < INCINERATOR.x + INCINERATOR.w && py > INCINERATOR.y && py < INCINERATOR.y + INCINERATOR.h;
       if (inRed || inBlue || inIncin) {
-        const correct = (inRed && this.carrying === 'red') ||
-                         (inBlue && this.carrying === 'blue') ||
-                         (inIncin && this.carrying === 'defective');
+        const carriedType = this.carriedItem.itemType;
+        const correct = (inRed && carriedType === 'red') ||
+                         (inBlue && carriedType === 'blue') ||
+                         (inIncin && carriedType === 'defective');
         this.score += correct ? 10 : -5;
         if (this.score < 0) this.score = 0;
         this.scoreText.setText('Score: ' + this.score);
@@ -243,8 +252,8 @@
             onStart: () => this.incineratorRect.setFillStyle(0xff8800)
           });
         }
-        this.carrying = null;
-        this.carryIndicator.setVisible(false);
+        this.carriedItem.destroy();
+        this.carriedItem = null;
       }
     }
 
@@ -273,7 +282,12 @@
         this.player.setFillStyle(0x00ff88);
       }
 
-      this.carryIndicator.setPosition(this.player.x, this.player.y - 26);
+      // only the item the player clicked on follows the cursor; everything
+      // else keeps drifting along the belt under its own velocity
+      if (this.carriedItem) {
+        this.carriedItem.x = this.player.x;
+        this.carriedItem.y = this.player.y - 26;
+      }
 
       // enemies: sway + fire
       this.enemies.getChildren().forEach((enemy) => {
@@ -296,6 +310,7 @@
         this.lastItemSpawn = time;
       }
       this.items.getChildren().slice().forEach((item) => {
+        if (item === this.carriedItem) return; // held item is exempt from drifting off the end
         if (item.x > ITEM_LOST_X) {
           item.destroy();
           this.score = Math.max(0, this.score - 3);
