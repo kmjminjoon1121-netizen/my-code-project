@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document>
+  <name>천하(天下) - 대현(大玄) 제국 세계관</name>
+  <description>가상의 중국풍 세계관 지도. 천룡력 1247년. 실제 중국 지형 위에 가상의 세력과 지명을 얹었습니다.</description>
+
+  <Folder>
+    <name>1. 제국과 주요 도시</name>
+    <Placemark><name>현경(玄京) - 대현 제국 황도</name><description>천하의 중심. 황제 '현종(玄宗) 이휘'가 용맥의 힘을 독점하려 하며, 황성 지하에는 봉인된 '용좌'가 있다.</description><Point><coordinates>108.94,34.34</coordinates></Point></Placemark>
+    <Placemark><name>해월항(海月港)</name><description>동해 최대 무역항. 달빛 아래에서만 열리는 '월시(月市)'에서 금지된 비급과 영약이 거래된다. 상인 길드 '만금회'의 본거지.</description><Point><coordinates>121.47,31.23</coordinates></Point></Placemark>
+    <Placemark><name>금릉(金陵)</name><description>강남의 문화 수도. 시인과 책사의 도시이자 황제에 반대하는 '청류당'의 은밀한 거점.</description><Point><coordinates>118.80,32.06</coordinates></Point></Placemark>
+    <Placemark><name>북안성(北安城)</name><description>북방 국경 요새. 초원 세력을 막는 대현 최정예 '흑기군'이 주둔한다.</description><Point><coordinates>116.40,40.00</coordinates></Point></Placemark>
+    <Placemark><name>성도(成都) 천부성</name><description>서촉의 곡창지대. 독자적인 관료 체계를 가진 반독립 도시로 약초와 연단술이 발달했다.</description><Point><coordinates>104.07,30.67</coordinates></Point></Placemark>
+  </Folder>
+
+  <Folder>
+    <name>2. 무림 문파</name>
+    <Placemark><name>적송사(赤松寺)</name><description>숭산의 불문 무술 총본산. 중립을 표방하지만 실제로는 황실과 물밑 거래를 한다. 절기: 금강불괴공.</description><Point><coordinates>112.93,34.50</coordinates></Point></Placemark>
+    <Placemark><name>청허관(淸虛觀)</name><description>무당산의 도문. 내공 수련과 태극 검법의 성지. 용맥의 균형을 지키는 수호자들이며 황제를 가장 경계한다.</description><Point><coordinates>111.00,32.40</coordinates></Point></Placemark>
+    <Placemark><name>청성검문(靑城劍門)</name><description>서남의 검객 문파. 문주 '유하연'은 대륙 검술 1위로 꼽히나 10년째 폐관 중이다.</description><Point><coordinates>103.57,30.90</coordinates></Point></Placemark>
+    <Placemark><name>설련사(雪蓮寺)</name><description>설산 고원의 밀교 사원. 환생한 성자 '달마 린포체'를 모시며 죽은 자의 혼을 다루는 비술을 전한다.</description><Point><coordinates>91.12,29.65</coordinates></Point></Placemark>
+    <Placemark><name>운무곡(雲霧谷) - 묘강 독문</name><description>운남의 안개 계곡. 독술과 고술(蠱術)의 본산이며 외부인은 살아서 나가기 어렵다.</description><Point><coordinates>102.70,25.04</coordinates></Point></Placemark>
+  </Folder>
+
+  <Folder>
+    <name>3. 외부 세력</name>
+    <Placemark><name>낭혼(狼魂) 칸국 - 초원의 왕정</name><description>북방 유목 연합. 칸 '아르슬란'이 늑대 정령과 계약해 기마군단을 이끈다. 대현과 100년 전쟁 중.</description><Point><coordinates>111.70,40.82</coordinates></Point></Placemark>
+    <Placemark><name>사해(沙海) 오아시스 연맹</name><description>서역 상단 도시국가 연합. 비단길의 관문이며 고대 문명의 유적과 이국의 마법이 섞여 있다.</description><Point><coordinates>94.66,40.14</coordinates></Point></Placemark>
+    <Placemark><name>흑림(黑林) 사냥꾼 부족</name><description>동북의 원시림. 호랑이 신을 섬기는 부족이 산다. 대현이 가장 두려워하는 은밀한 암살자들의 고향.</description><Point><coordinates>127.50,45.70</coordinates></Point></Placemark>
+    <Placemark><name>홍조도(紅潮島) 해적왕국</name><description>남해의 섬. 해적왕 '적랑'이 조정과 상단을 상대로 바다를 지배한다.</description><Point><coordinates>110.30,20.00</coordinates></Point></Placemark>
+  </Folder>
+
+  <Folder>
+    <name>4. 신비와 던전</name>
+    <Placemark><name>구곡천(九曲泉) - 용맥의 근원</name><description>황하의 발원지. 천하의 기운이 시작되는 곳. 황제는 이곳을 손에 넣으려 한다.</description><Point><coordinates>100.00,35.00</coordinates></Point></Placemark>
+    <Placemark><name>삼협 귀문(鬼門)</name><description>장강 협곡의 안개 속. 원혼이 떠돌며 산 자를 유혹한다. 지하 수궁으로 통하는 입구가 있다.</description><Point><coordinates>110.50,31.00</coordinates></Point></Placemark>
+    <Placemark><name>천리 지하묘 - 초대 황제릉</name><description>진시황 격인 '태조 현무제'의 무덤. 수은의 강과 병마용 군단이 잠들어 있으며 최근 도굴 흔적이 발견되었다.</description><Point><coordinates>109.27,34.38</coordinates></Point></Placemark>
+    <Placemark><name>천공산(天孔山)</name><description>하늘이 뚫린 산. 선인들이 사는 곳이라 전해지나 수백 년 아무도 돌아오지 않았다.</description><Point><coordinates>110.48,29.35</coordinates></Point></Placemark>
+  </Folder>
+
+  <Folder>
+    <name>5. 길과 강</name>
+    <Placemark><name>황하(黃河) - 용의 등뼈</name><LineString><tessellate>1</tessellate><coordinates>100.00,35.00 103.80,36.06 106.20,38.50 111.00,40.60 110.40,35.60 114.30,34.90 118.00,37.60</coordinates></LineString></Placemark>
+    <Placemark><name>장강(長江) - 용의 혈맥</name><LineString><tessellate>1</tessellate><coordinates>104.60,28.80 108.40,30.70 110.50,31.00 114.30,30.60 118.80,32.06 121.47,31.23</coordinates></LineString></Placemark>
+    <Placemark><name>비단길 - 서역 교역로</name><LineString><tessellate>1</tessellate><coordinates>108.94,34.34 104.60,35.60 98.50,39.70 94.66,40.14 87.60,43.80</coordinates></LineString></Placemark>
+    <Placemark><name>대운하 - 제국의 동맥</name><LineString><tessellate>1</tessellate><coordinates>116.40,40.00 117.10,39.10 117.00,36.60 118.80,32.06 120.30,30.30</coordinates></LineString></Placemark>
+  </Folder>
+</Document>
+</kml>
